@@ -13,7 +13,7 @@
 
 ## 3. Workspace resolution
 
-- [ ] 3.1 Implement `internal/workspace` naming (`orbit-<basename>-<h6>`) and resolution (exact match, nearest ancestor with a path-segment prefix, overlap refusal, ignoring unmanaged machines, orphan detection via an injected stat). Verify with unit tests covering every `workspace-sessions` resolution and overlap scenario, plus `/a/b` vs `/a/bc`
+- [x] 3.1 Implement `internal/workspace` naming (`orbit-<basename>-<h6>`) and resolution (exact match, nearest ancestor with a path-segment prefix, overlap refusal, ignoring unmanaged machines, orphan detection via an injected stat). Verify with unit tests covering every `workspace-sessions` resolution and overlap scenario, plus `/a/b` vs `/a/bc`
 
 ## 4. OrbStack client
 
