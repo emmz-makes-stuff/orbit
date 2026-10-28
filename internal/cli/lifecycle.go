@@ -180,10 +180,40 @@ func runSync(ctx context.Context, s *session, m workspace.Machine) error {
 		return err
 	}
 	copies := s.place(ro, home)
-	if err := copyExtras(ctx, s.client, m.Name, user, home, copies); err != nil {
+	if err := s.checkAgainstMounts(ctx, m.Name, copies); err != nil {
 		return err
 	}
+	skipped, err := copyExtras(ctx, s.client, m.Name, user, home, copies)
+	if err != nil {
+		return err
+	}
+	s.warnSkipped(skipped)
 	fmt.Fprintf(s.d.Stdout, "Synced %d read-only extra(s) into %s.\n", len(copies), m.Name)
+	return nil
+}
+
+// checkAgainstMounts refuses copies that would land in or around one of the machine's live mounts.
+// The config can have changed since the VM was built (an extra switched from rw to ro, say), and
+// the copy's rm -rf would then reach through the mount to the Mac.
+func (s *session) checkAgainstMounts(ctx context.Context, machine string, copies []orb.Mount) error {
+	list, err := s.client.List(ctx)
+	if err != nil {
+		return fmt.Errorf("could not reach OrbStack: %w", err)
+	}
+	for _, vm := range list {
+		if vm.Name != machine {
+			continue
+		}
+		for _, c := range copies {
+			for _, mt := range vm.Mounts {
+				if overlaps(c.Target(), mt.Target()) {
+					return fmt.Errorf("can't sync %s: it would be copied to %s, which overlaps %s, mounted in %s from "+
+						"%s; the config changed since the VM was built, so run `orbit rebuild`; nothing was synced",
+						c.Source, c.Target(), mt.Target(), machine, mt.Source)
+				}
+			}
+		}
+	}
 	return nil
 }
 

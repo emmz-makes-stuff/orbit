@@ -18,17 +18,22 @@ import (
 // copyExtras replaces each copy's Destination in the machine with the current contents of its Mac
 // Source, owned by user, as are any directories it needs under home. The Mac side is only read. A
 // source that is itself a symlink is copied as what it points to, so a symlinked dotfile arrives as
-// a file; symlinks inside directories are kept as symlinks.
-func copyExtras(ctx context.Context, client orb.Client, machine, user, home string, copies []orb.Mount) error {
+// a file; symlinks inside directories are kept as symlinks. Sockets can't be archived and mean
+// nothing in the VM, so they are left out and returned.
+func copyExtras(ctx context.Context, client orb.Client, machine, user, home string, copies []orb.Mount) (skipped []string, err error) {
 	if len(copies) == 0 {
-		return nil
+		return nil, nil
 	}
 	pr, pw := io.Pipe()
-	archived := make(chan error, 1)
+	type result struct {
+		skipped []string
+		err     error
+	}
+	archived := make(chan result, 1)
 	go func() {
-		err := writeTar(pw, copies)
+		skipped, err := writeTar(pw, copies)
 		pw.CloseWithError(err)
-		archived <- err
+		archived <- result{skipped, err}
 	}()
 
 	dsts := make([]string, len(copies))
@@ -40,7 +45,7 @@ func copyExtras(ctx context.Context, client orb.Client, machine, user, home stri
 		ownDirsScript(user, homeParents(home, dsts)), list, shellQuote(user), list)
 
 	var stderr strings.Builder
-	err := client.Run(ctx, orb.RunOptions{
+	err = client.Run(ctx, orb.RunOptions{
 		Machine: machine,
 		User:    "root",
 		Args:    []string{"sh", "-c", script},
@@ -50,27 +55,37 @@ func copyExtras(ctx context.Context, client orb.Client, machine, user, home stri
 	_ = pr.Close() // unblocks writeTar if the VM stopped reading early
 	// A Mac-side read failure is the real cause even when tar in the VM accepted a short archive.
 	// A closed pipe only means the VM side gave up first, so its error explains more.
-	if werr := <-archived; werr != nil && (err == nil || !errors.Is(werr, io.ErrClosedPipe)) {
-		return fmt.Errorf("copy read-only extras into %s: read them on this Mac: %w", machine, werr)
+	res := <-archived
+	if res.err != nil && (err == nil || !errors.Is(res.err, io.ErrClosedPipe)) {
+		return nil, fmt.Errorf("copy read-only extras into %s: read them on this Mac: %w", machine, res.err)
 	}
 	if err != nil {
-		return fmt.Errorf("copy read-only extras into %s: %v %s", machine, err, strings.TrimSpace(stderr.String()))
+		return nil, fmt.Errorf("copy read-only extras into %s: %v %s", machine, err, strings.TrimSpace(stderr.String()))
 	}
-	return nil
+	return res.skipped, nil
 }
 
-// writeTar archives each copy's Source under its Destination, relative to /.
-func writeTar(w io.Writer, copies []orb.Mount) error {
+// warnSkipped names the sockets a copy left out.
+func (s *session) warnSkipped(sockets []string) {
+	for _, p := range sockets {
+		s.warn("skipped socket %s: sockets can't be copied into a VM", p)
+	}
+}
+
+// writeTar archives each copy's Source under its Destination, relative to /, returning the Mac
+// paths of the sockets it left out.
+func writeTar(w io.Writer, copies []orb.Mount) ([]string, error) {
 	tw := tar.NewWriter(w)
+	var skipped []string
 	for _, c := range copies {
-		if err := addPath(tw, c.Source, c.Target()); err != nil {
-			return err
+		if err := addPath(tw, c.Source, c.Target(), &skipped); err != nil {
+			return skipped, err
 		}
 	}
-	return tw.Close()
+	return skipped, tw.Close()
 }
 
-func addPath(tw *tar.Writer, declared, dst string) error {
+func addPath(tw *tar.Writer, declared, dst string, skipped *[]string) error {
 	// Follow a top-level symlink: the VM gets the target's contents at the destination.
 	root, err := filepath.EvalSymlinks(declared)
 	if err != nil {
@@ -87,6 +102,10 @@ func addPath(tw *tar.Writer, declared, dst string) error {
 		rel, err := filepath.Rel(root, p)
 		if err != nil {
 			return err
+		}
+		if info.Mode()&fs.ModeSocket != 0 {
+			*skipped = append(*skipped, filepath.Join(declared, rel)) // as the user declared it
+			return nil
 		}
 		name := strings.TrimPrefix(path.Join(dst, filepath.ToSlash(rel)), "/")
 

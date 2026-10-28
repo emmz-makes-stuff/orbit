@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -502,6 +504,7 @@ func TestOverlappingExtrasRefused(t *testing.T) {
 		{"ro parent of rw", "[[extras]]\npath = \"~/.config\"\n\n[[extras]]\npath = \"~/.config/gh\"\nmode = \"rw\"\n"},
 		{"rw parent of ro", "[[extras]]\npath = \"~/notes\"\nmode = \"rw\"\n\n[[extras]]\npath = \"~/notes/x\"\n"},
 		{"rw inside rw", "[[extras]]\npath = \"~/notes\"\nmode = \"rw\"\n\n[[extras]]\npath = \"~/notes/x\"\nmode = \"rw\"\n"},
+		{"ro inside ro", "[[extras]]\npath = \"~/.config\"\n\n[[extras]]\npath = \"~/.config/gh\"\n"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -513,7 +516,7 @@ func TestOverlappingExtrasRefused(t *testing.T) {
 				t.Fatal("want non-zero exit")
 			}
 			msg := f.stderr.String()
-			if !strings.Contains(msg, "overlap and one of them is writeable") || !strings.Contains(msg, config.File(f.deps.ConfigDir)) {
+			if !strings.Contains(msg, "overlap, which could change files on your Mac") || !strings.Contains(msg, config.File(f.deps.ConfigDir)) {
 				t.Errorf("stderr = %q", msg)
 			}
 			if len(f.orb.Created) != 0 {
@@ -557,13 +560,30 @@ func (c lenientTar) Run(ctx context.Context, opts orb.RunOptions) error {
 	return c.Fake.Run(ctx, opts)
 }
 
-func TestNestedReadOnlyExtrasAllowed(t *testing.T) {
+func TestSocketInExtraIsSkippedWithWarning(t *testing.T) {
 	f := newFixture(t)
-	writeFile(t, filepath.Join(f.home, ".config", "gh", "hosts.yml"), "h\n")
-	f.config(t, "[[extras]]\npath = \"~/.config\"\n\n[[extras]]\npath = \"~/.config/gh\"\n")
+	// A short socket path: macOS caps them at 104 bytes, and t.TempDir paths are long.
+	sockDir, err := os.MkdirTemp("/tmp", "orbit-sock-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(sockDir) })
+	writeFile(t, filepath.Join(sockDir, "keep.txt"), "k\n")
+	sock := filepath.Join(sockDir, "S.agent")
+	l, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	f.config(t, fmt.Sprintf("[[extras]]\npath = %q\n", sockDir))
+
 	f.mustRun(t)
-	if len(f.orb.Created) != 1 {
-		t.Error("VM not created")
+
+	if !strings.Contains(f.stderr.String(), "skipped socket "+sock) {
+		t.Errorf("stderr = %q, want a warning naming %s", f.stderr.String(), sock)
+	}
+	if got := f.vm.copied[strings.TrimPrefix(filepath.Join(sockDir, "keep.txt"), "/")]; got != "k\n" {
+		t.Errorf("copied = %v, want the rest of the extra copied", f.vm.copied)
 	}
 }
 
@@ -634,6 +654,29 @@ func TestSetupFailureKeepsVMAndNamesScript(t *testing.T) {
 	}
 	if len(f.orb.Shells) != 0 || f.vm.provisioned {
 		t.Error("attached or marked provisioned after a failure")
+	}
+}
+
+func TestUnreadableSetupFailsInsteadOfSkipping(t *testing.T) {
+	f := newFixture(t)
+	setup := filepath.Join(f.ws, setupScript)
+	stat := f.deps.Stat
+	f.deps.Stat = func(p string) error {
+		if p == setup {
+			return fs.ErrPermission
+		}
+		return stat(p)
+	}
+	if code := f.run(); code == 0 {
+		t.Fatal("want non-zero exit")
+	}
+	if !strings.Contains(f.stderr.String(), "can't check for "+setupScript) {
+		t.Errorf("stderr = %q", f.stderr.String())
+	}
+	for _, step := range f.vm.steps {
+		if step == "marker" {
+			t.Error("VM marked provisioned although setup.sh was never checked")
+		}
 	}
 }
 

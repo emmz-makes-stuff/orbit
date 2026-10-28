@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -336,6 +337,35 @@ func TestSyncByNameWithoutWorkspaceMount(t *testing.T) {
 	f.mustRun(t, "sync", "orbit-bare-000000")
 	if len(f.vm.copied) != 1 {
 		t.Errorf("copied = %v", f.vm.copied)
+	}
+}
+
+func TestSyncRefusesCopyOverLiveMount(t *testing.T) {
+	for _, c := range []struct{ name, extra string }{
+		{"extra switched from rw to ro", "~/notes"},
+		{"new ro extra inside a live rw mount", "~/notes/x"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t)
+			notes := filepath.Join(f.home, "notes")
+			writeFile(t, filepath.Join(notes, "x"), "x\n")
+			vm := vmFor(f.ws, orb.StateRunning)
+			vm.Mounts = append(vm.Mounts, orb.Mount{Source: notes, Destination: f.vm.home + "/notes"})
+			f.withVMs(vm)
+			f.config(t, fmt.Sprintf("[[extras]]\npath = %q\n", c.extra))
+			if code := f.run("sync"); code == 0 {
+				t.Fatal("want non-zero exit")
+			}
+			msg := f.stderr.String()
+			if !strings.Contains(msg, "orbit rebuild") || !strings.Contains(msg, notes) {
+				t.Errorf("stderr = %q", msg)
+			}
+			for _, step := range f.vm.steps {
+				if step == "copy" {
+					t.Error("copied over a live mount")
+				}
+			}
+		})
 	}
 }
 

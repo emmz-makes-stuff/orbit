@@ -74,10 +74,10 @@
 
 ## 13. Review fixes: copy and sync safety
 
-- [ ] 13.1 Refuse any extra that lies within another, whatever their modes. Update the vm-access "Overlapping extras" scenario and the README, and flip `TestNestedReadOnlyExtrasAllowed`
-- [ ] 13.2 `orbit sync` checks each copy's VM path against the VM's actual mounts (from `orbctl list`), and refuses if a copy would overlap a live mount, telling the user to rebuild. Test: created with an rw extra, config changed to ro, then sync is refused
-- [ ] 13.3 Skip sockets in read-only copies, with a warning naming each one, instead of failing the copy
-- [ ] 13.4 Only a not-exist error means there is no `.orbit/setup.sh`. Any other `Stat` error fails provisioning
+- [x] 13.1 Refuse any extra that lies within another, whatever their modes. Update the vm-access "Overlapping extras" scenario and the README, and flip `TestNestedReadOnlyExtrasAllowed`
+- [x] 13.2 `orbit sync` checks each copy's VM path against the VM's actual mounts (from `orbctl list`), and refuses if a copy would overlap a live mount, telling the user to rebuild. Test: created with an rw extra, config changed to ro, then sync is refused
+- [x] 13.3 Skip sockets in read-only copies, with a warning naming each one, instead of failing the copy
+- [x] 13.4 Only a not-exist error means there is no `.orbit/setup.sh`. Any other `Stat` error fails provisioning
 
 ## 14. Review fixes: errors and cleanup
 

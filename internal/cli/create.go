@@ -136,11 +136,12 @@ func (s *session) splitExtras(cfg *config.Config, ws string) (rw, ro []string, e
 				e.Path, ws, config.File(s.d.ConfigDir))
 		}
 		// Replacing a read-only copy starts with rm -rf in the VM, which reaches through any mount
-		// inside it to the Mac, and a copy inside a mount is written to the Mac.
+		// inside it to the Mac; a copy inside a mount is written to the Mac; and a symlink in one copy
+		// can redirect a nested one anywhere, a mount included.
 		for _, o := range extras[:i] {
-			if (e.Mode == config.ModeRW || o.Mode == config.ModeRW) && overlaps(e.Path, o.Path) {
-				return nil, nil, fmt.Errorf("extras %s and %s overlap and one of them is writeable, which could "+
-					"change files on your Mac; remove one of them from %s", o.Path, e.Path, config.File(s.d.ConfigDir))
+			if overlaps(e.Path, o.Path) {
+				return nil, nil, fmt.Errorf("extras %s and %s overlap, which could change files on your Mac; "+
+					"declare only one of them in %s", o.Path, e.Path, config.File(s.d.ConfigDir))
 			}
 		}
 		if err := s.d.Stat(e.Path); err != nil {
@@ -209,9 +210,11 @@ func (s *session) provision(ctx context.Context, p *plan) error {
 	}
 	if len(p.copies) > 0 {
 		s.info("copying %d read-only extra(s)", len(p.copies))
-		if err := copyExtras(ctx, s.client, p.name, user, home, p.copies); err != nil {
+		skipped, err := copyExtras(ctx, s.client, p.name, user, home, p.copies)
+		if err != nil {
 			return err
 		}
+		s.warnSkipped(skipped)
 	}
 
 	baseline := config.BaselinePath(s.d.ConfigDir)
@@ -233,7 +236,9 @@ func (s *session) provision(ctx context.Context, p *plan) error {
 	}
 
 	setup := filepath.Join(p.workspace, setupScript)
-	if s.d.Stat(setup) == nil {
+	if err := s.d.Stat(setup); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("provisioning failed: can't check for %s: %w", setupScript, err)
+	} else if err == nil {
 		s.info("provisioning: running %s", setupScript)
 		// Run in place from the mounted workspace, so the script can find files next to it.
 		err := s.client.Run(ctx, orb.RunOptions{

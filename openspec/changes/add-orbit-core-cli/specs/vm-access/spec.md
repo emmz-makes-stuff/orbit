@@ -54,8 +54,8 @@ other extra appears at the same absolute path. The VM SHALL get nothing else fro
 - **THEN** the `~/github/emmz` VM has it and other workspace VMs do not
 
 #### Scenario: Overlapping extras
-- **WHEN** one extra lies within another and at least one of the two is `rw`, such as `~/.config` with `~/.config/gh` as `rw`
-- **THEN** create, rebuild and sync exit non-zero, name both extras, and create or change nothing, because replacing the read-only copy would reach through the mount to the Mac
+- **WHEN** one extra lies within another, whatever their modes, such as `~/.config` with `~/.config/gh`
+- **THEN** create, rebuild and sync exit non-zero, name both extras, and create or change nothing, because replacing a read-only copy could reach through a mount, or through a symlink in the outer copy, to the Mac
 
 #### Scenario: Missing extra
 - **WHEN** a declared extra does not exist on the Mac at create or rebuild time
