@@ -12,7 +12,7 @@ stored there can be changed by Claude.
 ## Decision
 
 **No datastore of orbit's own.** Machines are named `orbit-<slug>`. The workspace path is read back
-from the machine's mount config (`orbctl config get machine.<name>.mounts`). To resolve a directory,
+from the machine's first mount (`config.mounts[0].source` in `orbctl list -f json`). To resolve a directory,
 `orbit` lists the `orbit-*` machines and picks the one whose workspace mount is the nearest ancestor of
 (or equal to) the current directory.
 

@@ -7,16 +7,23 @@ change's specs. The foundational calls are ADR-0001 (OrbStack isolated machines)
 ADR-0003 (OrbStack is the record; config split by trust). Runtime and build dependencies are in
 `docs/dependencies.md`.
 
-Verified locally, against OrbStack 2.2.4 and docs.orbstack.dev:
+Verified locally against OrbStack 2.2.4. The spike results from §1 are in this change's `devlog/`.
 
-- `orb create --isolated --mount SOURCE[:DEST] --forward-ssh-agent` exists. A mount without DEST
-  appears at the same path.
-- Mounts are stored as `machine.<name>.mounts` (`orbctl config get`), comma-separated, and are
-  changeable with `orb config set` plus a restart.
+- `orb create --isolated --mount SOURCE[:DEST] --forward-ssh-agent` exists. A mount **without** DEST
+  lands at `/mnt/mac/<source>`, not at the same path. With an explicit `SRC:SRC` it appears at the same
+  path, writeable both ways. Nothing else from the Mac is visible: `/mnt/mac` holds only the mounts'
+  own paths, `/Users` is absent, and the `mac` command fails.
+- Mounts can be changed with `orb config set machine.<name>.mounts` (comma-separated) plus a restart.
 - There is no read-only mount option.
-- `orbctl list -f json` gives `name`, `state` and `config.isolated` per machine.
-- `orbctl run -m <name> -u <user> -w <dir>` runs a command or a shell in a machine.
-- `ORBENV=VAR1:VAR2` forwards those Mac environment variables into `orb`/`orbctl run`.
+- `orbctl list -f json` gives `name`, `state` and `config` per machine, including
+  `config.mounts: [{source, destination?}]` in creation order.
+- `orbctl run -m <name> -w <dir>` with no command opens the default user's login shell (`-bash`) in
+  `<dir>`. If `<dir>` doesn't exist in the VM, it silently starts in `/` with exit 0. Exit codes pass
+  through.
+- `ORBENV=VAR1:VAR2` forwards those Mac environment variables into `orbctl run`, isolated machines
+  included. Without `ORBENV` they don't arrive.
+- `security -i` takes Keychain commands on stdin and passes their exit codes through. "Item not found"
+  exits 44.
 - `claude setup-token` exists (Claude Code 2.1.312).
 
 ## Goals / Non-Goals
@@ -60,8 +67,9 @@ real bugs that vet misses).
 
 ### D3. Workspace VMs are isolated OrbStack machines (ADR-0001)
 
-Create with `orb create --isolated --forward-ssh-agent --mount <ws> [--mount <rw-extra>]... <distro>
-<name>`. Mounts carry no DEST, so each one appears at its Mac path. `isolate_network` is left off, so
+Create with `orb create --isolated --forward-ssh-agent --mount <ws>:<ws> [--mount <extra>:<extra>]...
+<distro> <name>`. Every mount names its destination explicitly as its own Mac path. Without a DEST,
+OrbStack puts it under `/mnt/mac/`. `isolate_network` is left off, so
 the network stays open. Distro and resource limits come from config (D7). The default is `ubuntu`,
 which means OrbStack's default Ubuntu.
 *Rejected:* non-isolated machines (whole Mac filesystem shared), Docker containers (not a full VM).
@@ -72,16 +80,17 @@ which means OrbStack's default Ubuntu.
 - **Name:** `orbit-<basename>-<h>`, where `<basename>` is the workspace's basename lowercased and cut
   down to `[a-z0-9-]`, and `<h>` is the first 6 hex digits of the SHA-256 of the canonical workspace
   path. That's deterministic, readable in OrbStack's UI, and collisions are vanishingly unlikely.
-- **Workspace path** is the first entry of `orbctl config get machine.<name>.mounts`. `orbit` always
-  writes the workspace first, and extras after it.
+- **Workspace path** is `config.mounts[0].source` from `orbctl list -f json`, so a single list call
+  resolves everything. `orbit` always passes the workspace mount first, and extras after it.
 - **Resolution:** canonicalise the current directory with `filepath.EvalSymlinks` and `filepath.Abs`.
   List the managed machines and read each workspace path. Pick the longest workspace path that equals
   the current directory or is a path-segment prefix of it (so `/a/b` covers `/a/b/c` but not
   `/a/bc`). If there's none, and any workspace has the current directory as a strict prefix, refuse
   (overlap). Otherwise create.
 - **Orphaned** means `os.Stat` of the workspace path fails.
-- Workspace and extra paths containing `,` are rejected at create time, because the mounts list is
-  comma-separated.
+- Workspace and extra paths containing `:` are rejected at create time, because `--mount` uses it to
+  separate SOURCE from DEST. Paths containing `,` are also rejected, so a mounts list edited by hand
+  with `orb config set` stays unambiguous.
 
 *Rejected:* a state file in `~/.config/orbit`, because it drifts from OrbStack.
 
@@ -91,6 +100,9 @@ After any needed start, `orbit` replaces itself (`syscall.Exec`) with
 `orbctl run -m <name> -w <cwd>`, which runs the default user's shell. Replacing the process passes the
 terminal, signals and exit code straight through, with no PTY plumbing. Concurrent shells are just
 concurrent `orbctl run` processes. Starting a stopped VM is `orbctl start <name>` beforehand.
+`orbctl run` silently falls back to `/` when `-w` doesn't exist in the VM, so `orbit` only ever passes
+a directory it has resolved to lie within the workspace mount. The current directory always does, by
+construction.
 *Rejected:* `ssh <name>@orb` (needs SSH config and `AcceptEnv` for the token), and running `orbctl` as
 a child process (orbit would have to relay signals and exit codes).
 
@@ -98,10 +110,13 @@ a child process (orbit would have to relay signals and exit codes).
 
 - **Store:** `orbit auth` reads the token (from stdin when piped, otherwise from a hidden prompt via
   `golang.org/x/term`). It sends `add-generic-password -U -s orbit -a claude-oauth-token -w <token>`
-  to `security -i` **on stdin**, so the token never appears in a process argument list.
-- **Clear:** `security delete-generic-password -s orbit -a claude-oauth-token`. "Not found" counts as
-  success.
-- **Read:** `security find-generic-password -s orbit -a claude-oauth-token -w`, at every attach.
+  to `security -i` **on stdin**, so the token never appears in a process argument list. `security -i`
+  parses its own quoting, so the token must match `[A-Za-z0-9_-]+` (real `sk-ant-oat01-…` tokens do).
+  Anything else is rejected before it reaches `security`.
+- **Clear:** `security delete-generic-password -s orbit -a claude-oauth-token`. Exit 44 (not found)
+  counts as success.
+- **Read:** `security find-generic-password -s orbit -a claude-oauth-token -w`, at every attach. Exit 44
+  means no token is stored. Any other non-zero exit is an error.
 - **Inject:** before the `exec`, set `CLAUDE_CODE_OAUTH_TOKEN` in orbit's environment and add it to
   `ORBENV`, keeping any `ORBENV` entries already present. The token lives only in the process
   environment of the shell and its children, and is never in argv or on the VM's disk.
@@ -161,7 +176,7 @@ logs.
 
 ### D10. Testing seams
 
-- `internal/orb`: a `Client` interface with List, MountsOf, Create, Start, Stop, Delete, Run (with
+- `internal/orb`: a `Client` interface with List (machines with their state and mounts), Create, Start, Stop, Delete, Run (with
   stdin, stdout and stderr) and ExecShell. The real implementation shells out to `orbctl`.
 - `internal/keychain`: a `Store` interface with Get, Set and Clear. The real implementation is
   `security`.

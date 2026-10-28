@@ -6,7 +6,10 @@ Claude in. Requirements: `docs/DISCOVERY.md`. Foundational decisions: `docs/adrs
 
 **Sandbox note:** OrbStack commands (`orbctl`/`orb`, and so `make deps` and the integration tests) fail
 inside Claude Code's sandbox with a panic like `rename ~/.orbstack/log/vmgr.1.log …: operation not
-permitted`. That's the sandbox, not a real fault: rerun the command unsandboxed.
+permitted`. That's the sandbox, not a real fault: rerun the command unsandboxed. The same goes for the
+Go gates (`make build`/`test`/`lint`/`gates`), which fail with `open ~/Library/Caches/go-build/…:
+operation not permitted`, and for `go get`/`go install`, which fail with `x509: OSStatus -26276` against
+proxy.golang.org.
 
 ## OpenSpec workflow
 

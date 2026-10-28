@@ -2,13 +2,13 @@
 
 ## 1. Scaffold and spikes
 
-- [ ] 1.1 Create the Go module (`go mod init`, go 1.27), `cmd/orbit/main.go` with a cobra root that prints help, and empty `internal/{orb,keychain,workspace,config}` packages. Verify that all four gates pass: `go build ./...`, `go test ./...`, `test -z "$(gofmt -l .)"`, `go vet ./... && staticcheck ./...`
-- [ ] 1.2 Spike (manual, scratch isolated machine): confirm that `orb create --isolated --forward-ssh-agent --mount <dir>` mounts `<dir>` writeable at the same path with no `/mnt/mac`, that `orbctl config get machine.<n>.mounts` lists it first, that `orbctl run -m <n> -w <dir>` with no command opens a login shell, and that `ORBENV=CLAUDE_CODE_OAUTH_TOKEN` reaches that shell. Record the results in a devlog note. If any fails, stop and take the D5/D6 fallback to Emmz
-- [ ] 1.3 Spike: confirm that `security -i` accepts `add-generic-password -U -s orbit-spike -a t -w <value>` on stdin, that `find-generic-password -w` returns it, and that `delete-generic-password` removes it. Record the results in a devlog note. If it fails, stop and raise the `go-keychain` fallback
+- [x] 1.1 Create the Go module (`go mod init`, go 1.27), `cmd/orbit/main.go` with a cobra root that prints help, and empty `internal/{orb,keychain,workspace,config}` packages. Verify that all four gates pass: `go build ./...`, `go test ./...`, `test -z "$(gofmt -l .)"`, `go vet ./... && staticcheck ./...`
+- [x] 1.2 Spike (manual, scratch isolated machine): confirm that `orb create --isolated --forward-ssh-agent --mount <dir>` mounts `<dir>` writeable at the same path with no `/mnt/mac`, that `orbctl config get machine.<n>.mounts` lists it first, that `orbctl run -m <n> -w <dir>` with no command opens a login shell, and that `ORBENV=CLAUDE_CODE_OAUTH_TOKEN` reaches that shell. Record the results in a devlog note. If any fails, stop and take the D5/D6 fallback to Emmz
+- [x] 1.3 Spike: confirm that `security -i` accepts `add-generic-password -U -s orbit-spike -a t -w <value>` on stdin, that `find-generic-password -w` returns it, and that `delete-generic-password` removes it. Record the results in a devlog note. If it fails, stop and raise the `go-keychain` fallback
 
 ## 2. Configuration
 
-- [ ] 2.1 Implement `internal/config`: load `~/.config/orbit/config.toml` (a missing file means empty config), expand `~`, canonicalise workspace keys, merge global and per-workspace extras, default extra mode to `ro`, and reject unknown modes and paths containing `,`. Verify with table tests for each case
+- [ ] 2.1 Implement `internal/config`: load `~/.config/orbit/config.toml` (a missing file means empty config), expand `~`, canonicalise workspace keys, merge global and per-workspace extras, default extra mode to `ro`, and reject unknown modes and paths containing `:` or `,`. Verify with table tests for each case
 - [ ] 2.2 Verify the "workspace content cannot widen access" requirement: a unit test shows that config loading reads only `~/.config/orbit`, and that a `.orbit/config.toml` in a workspace has no effect
 
 ## 3. Workspace resolution
@@ -17,12 +17,12 @@
 
 ## 4. OrbStack client
 
-- [ ] 4.1 Implement `internal/orb.Client` over `orbctl`: List (JSON), MountsOf, Create (isolated, forward-ssh-agent, ordered mounts, distro and limits), Start, Stop, Delete, Run (stdin, stdout and stderr wired), and ExecShell (`syscall.Exec` with env). Also detect a missing `orbctl` with a clear error. Verify with unit tests on the argument building and JSON parsing, using a fake runner
+- [ ] 4.1 Implement `internal/orb.Client` over `orbctl`: List (JSON, including `config.mounts`), Create (isolated, forward-ssh-agent, ordered `SRC:SRC` mounts, distro and limits), Start, Stop, Delete, Run (stdin, stdout and stderr wired), and ExecShell (`syscall.Exec` with env). Also detect a missing `orbctl` with a clear error. Verify with unit tests on the argument building and JSON parsing, using a fake runner
 - [ ] 4.2 Add a fake `Client` for use by command tests, and verify it compiles against the interface
 
 ## 5. Claude auth
 
-- [ ] 5.1 Implement `internal/keychain.Store` over `security` (Set via `security -i` on stdin, Get, Clear with "not found" treated as success). Verify with unit tests on the commands sent, checking that the token never appears in argv
+- [ ] 5.1 Implement `internal/keychain.Store` over `security` (Set via `security -i` on stdin, with tokens outside `[A-Za-z0-9_-]+` rejected; Get, where exit 44 means none stored; Clear, with exit 44 treated as success). Verify with unit tests on the commands sent, checking that the token never appears in argv
 - [ ] 5.2 Implement `orbit auth` (stdin when piped, hidden prompt otherwise, empty input rejected, nothing echoed) and `orbit auth --clear`. Verify with command tests covering the `claude-auth` store, empty-input and clear scenarios
 
 ## 6. Create, provision and attach
