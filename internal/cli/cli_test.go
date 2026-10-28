@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -56,7 +57,9 @@ func newHarness(t *testing.T) *harness {
 		ReadSecret:      func() ([]byte, error) { return nil, errors.New("no terminal in tests") },
 		Home:            t.TempDir(),
 		Getwd:           func() (string, error) { return "/", nil },
-		Stat:            func(string) error { return nil },
+		Stat:            func(p string) error { _, err := os.Stat(p); return err },
+		Environ:         func() []string { return []string{"HOME=/Users/e"} },
+		SSHAgentHasKeys: func() bool { return true },
 	}
 	return h
 }

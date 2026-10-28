@@ -27,9 +27,9 @@
 
 ## 6. Create, provision and attach
 
-- [ ] 6.1 Implement the root command's create path: build the mounts (workspace first, then `rw` extras), check that extras exist before creating anything, create the VM, copy `ro` extras by tar stream (D8), run `baseline.sh` as root and then `.orbit/setup.sh` as the user, with output streamed and failures naming the script (D9), and write the provisioned marker. Verify with command tests against the fake client, covering the missing-extra, missing-baseline, setup-failure and ordering scenarios
-- [ ] 6.2 Implement the attach path: start if stopped, warn if the provisioned marker is missing, warn if the Mac's SSH agent is empty (`ssh-add -l` exits 1 or 2; this check also runs on create), read the token (warn if absent), set `CLAUDE_CODE_OAUTH_TOKEN` and `ORBENV`, then exec the shell in the current directory. Verify with command tests covering stopped-VM, subdirectory working dir, empty-agent, keys-loaded, token-present and token-absent scenarios
-- [ ] 6.3 Wire overlap refusal and the OrbStack-unavailable error into the root command. Verify with command tests for both error messages and the non-zero exits
+- [x] 6.1 Implement the root command's create path: build the mounts (workspace first, then `rw` extras), check that extras exist before creating anything, create the VM, copy `ro` extras by tar stream (D8), run `baseline.sh` as root and then `.orbit/setup.sh` as the user, with output streamed and failures naming the script (D9), and write the provisioned marker. Verify with command tests against the fake client, covering the missing-extra, missing-baseline, setup-failure and ordering scenarios
+- [x] 6.2 Implement the attach path: start if stopped, warn if the provisioned marker is missing, warn if the Mac's SSH agent is empty (`ssh-add -l` exits 1 or 2; this check also runs on create), read the token (warn if absent), set `CLAUDE_CODE_OAUTH_TOKEN` and `ORBENV`, then exec the shell in the current directory. Verify with command tests covering stopped-VM, subdirectory working dir, empty-agent, keys-loaded, token-present and token-absent scenarios
+- [x] 6.3 Wire overlap refusal and the OrbStack-unavailable error into the root command. Verify with command tests for both error messages and the non-zero exits
 
 ## 7. Lifecycle commands
 

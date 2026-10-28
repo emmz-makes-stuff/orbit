@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -30,6 +31,9 @@ type Deps struct {
 	Home       string
 	Getwd      func() (string, error)
 	Stat       func(string) error
+	Environ    func() []string
+	// SSHAgentHasKeys reports whether the Mac's SSH agent holds at least one key.
+	SSHAgentHasKeys func() bool
 }
 
 // NewRoot builds the orbit command tree.
@@ -41,7 +45,7 @@ func NewRoot(d *Deps) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return cmd.Help()
+			return runRoot(cmd.Context(), d)
 		},
 	}
 	root.SetIn(d.Stdin)
@@ -70,6 +74,8 @@ func Main(args []string) int {
 		Home:            home,
 		Getwd:           os.Getwd,
 		Stat:            func(p string) error { _, err := os.Stat(p); return err },
+		Environ:         os.Environ,
+		SSHAgentHasKeys: func() bool { return exec.Command("ssh-add", "-l").Run() == nil },
 	}
 	return Run(context.Background(), d, args)
 }
