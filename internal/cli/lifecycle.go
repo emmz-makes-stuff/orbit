@@ -50,14 +50,9 @@ type confirmedFunc func(ctx context.Context, s *session, m workspace.Machine, ye
 
 func confirmedCmd(d *Deps, use, short string, fn confirmedFunc) *cobra.Command {
 	var yes bool
-	cmd := targetCmd(d, use, short, nil)
-	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		s, m, err := resolveTarget(cmd.Context(), d, args)
-		if err != nil {
-			return err
-		}
-		return fn(cmd.Context(), s, m, yes)
-	}
+	cmd := targetCmd(d, use, short, func(ctx context.Context, s *session, m workspace.Machine) error {
+		return fn(ctx, s, m, yes)
+	})
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "don't ask for confirmation")
 	return cmd
 }
@@ -141,6 +136,7 @@ func runRebuild(ctx context.Context, s *session, m workspace.Machine, yes bool) 
 	if err != nil {
 		return err
 	}
+	p.name = m.Name // the name the user knows it by, even if orbit would name it differently today
 	prompt := fmt.Sprintf("Rebuild %s (workspace %s)? Anything that exists only inside the VM is lost.", m.Name, m.Workspace)
 	if err := s.confirm(prompt, yes); err != nil {
 		return err

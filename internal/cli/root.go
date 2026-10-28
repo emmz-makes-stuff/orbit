@@ -118,7 +118,7 @@ func (s *session) attach(ctx context.Context, m workspace.Machine, dir string, f
 	if !fresh {
 		var exit *orb.ExitError
 		switch err := s.client.Run(ctx, orb.RunOptions{Machine: m.Name, Args: []string{"test", "-f", provisionedMarker}}); {
-		case errors.As(err, &exit):
+		case errors.As(err, &exit) && exit.Code == 1: // test's "no such file"; anything else is orbctl's
 			s.warn("%s never finished provisioning; `orbit rebuild` recreates it from scratch", m.Name)
 		case err != nil:
 			s.warn("could not check whether %s finished provisioning: %v", m.Name, err)

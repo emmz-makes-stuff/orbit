@@ -136,6 +136,12 @@ func (c *CLI) output(ctx context.Context, args ...string) ([]byte, error) {
 		if msg != "" {
 			return nil, fmt.Errorf("orbctl %s: %s", args[0], msg)
 		}
+		// Not wrapped: an *ExitError means a command in a machine failed, and orbctl's own failure
+		// isn't that.
+		var exit *ExitError
+		if errors.As(err, &exit) {
+			return nil, fmt.Errorf("orbctl %s: exited %d without saying why", args[0], exit.Code)
+		}
 		return nil, fmt.Errorf("orbctl %s: %w", args[0], err)
 	}
 	return stdout.Bytes(), nil

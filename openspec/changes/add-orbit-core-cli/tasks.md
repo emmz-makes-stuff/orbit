@@ -81,8 +81,8 @@
 
 ## 14. Review fixes: errors and cleanup
 
-- [ ] 14.1 orbctl's own failures always print an `orbit:` message: `orb.output` stops wrapping `*ExitError`, and `cli.Run` drops the passthrough it no longer needs. Test a silent orbctl failure
-- [ ] 14.2 On attach, only exit 1 from the marker check means "never finished provisioning". Any other exit code gets the "could not check" warning
-- [ ] 14.3 `rebuild` keeps the VM's existing name
-- [ ] 14.4 `defaultUser` gets a clear message when `id -un` prints nothing
-- [ ] 14.5 `targetCmd` and `confirmedCmd` share one resolve-and-run path
+- [x] 14.1 orbctl's own failures always print an `orbit:` message: `orb.output` stops wrapping `*ExitError`, and `cli.Run` drops the passthrough it no longer needs. Test a silent orbctl failure
+- [x] 14.2 On attach, only exit 1 from the marker check means "never finished provisioning". Any other exit code gets the "could not check" warning
+- [x] 14.3 `rebuild` keeps the VM's existing name
+- [x] 14.4 `defaultUser` gets a clear message when `id -un` prints nothing
+- [x] 14.5 `targetCmd` and `confirmedCmd` share one resolve-and-run path

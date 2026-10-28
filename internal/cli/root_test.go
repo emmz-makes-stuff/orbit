@@ -292,24 +292,35 @@ func TestAttachWarnsWhenNeverProvisioned(t *testing.T) {
 }
 
 func TestAttachMarkerCheckFailureIsNotCalledUnprovisioned(t *testing.T) {
-	f := newFixture(t)
-	name := workspace.Name(f.ws)
-	f.orb = orbtest.New(orb.Machine{Name: name, State: orb.StateRunning, Mounts: []orb.Mount{{Source: f.ws}}})
-	f.orb.OnRun = func(r orbtest.Run) error {
-		if len(r.Args) > 0 && r.Args[0] == "test" {
-			return errors.New("orbctl run: machine is busy")
-		}
-		return f.vm.onRun(r)
-	}
+	for _, c := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"orbctl error", errors.New("orbctl run: machine is busy"), "machine is busy"},
+		{"orbctl exit code", &orb.ExitError{Code: 255}, "exit status 255"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t)
+			name := workspace.Name(f.ws)
+			f.orb = orbtest.New(orb.Machine{Name: name, State: orb.StateRunning, Mounts: []orb.Mount{{Source: f.ws}}})
+			f.orb.OnRun = func(r orbtest.Run) error {
+				if len(r.Args) > 0 && r.Args[0] == "test" {
+					return c.err
+				}
+				return f.vm.onRun(r)
+			}
 
-	f.mustRun(t)
+			f.mustRun(t)
 
-	msg := f.stderr.String()
-	if strings.Contains(msg, "never finished provisioning") || !strings.Contains(msg, "machine is busy") {
-		t.Errorf("stderr = %q, want the OrbStack error, not the unprovisioned warning", msg)
-	}
-	if len(f.orb.Shells) != 1 {
-		t.Error("shell not opened")
+			msg := f.stderr.String()
+			if strings.Contains(msg, "never finished provisioning") || !strings.Contains(msg, c.want) {
+				t.Errorf("stderr = %q, want the OrbStack error, not the unprovisioned warning", msg)
+			}
+			if len(f.orb.Shells) != 1 {
+				t.Error("shell not opened")
+			}
+		})
 	}
 }
 
@@ -677,6 +688,17 @@ func TestUnreadableSetupFailsInsteadOfSkipping(t *testing.T) {
 		if step == "marker" {
 			t.Error("VM marked provisioned although setup.sh was never checked")
 		}
+	}
+}
+
+func TestDefaultUserWithoutHomeIsAClearError(t *testing.T) {
+	f := newFixture(t)
+	f.vm.home = ""
+	if code := f.run(); code == 0 {
+		t.Fatal("want non-zero exit")
+	}
+	if msg := f.stderr.String(); !strings.Contains(msg, "expected a name and a home directory") || strings.Contains(msg, "<nil>") {
+		t.Errorf("stderr = %q", msg)
 	}
 }
 

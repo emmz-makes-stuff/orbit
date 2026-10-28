@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -165,10 +166,21 @@ func TestAuthDoesNotNeedOrbStack(t *testing.T) {
 	}
 }
 
-func TestRunMapsExitErrors(t *testing.T) {
+func TestRunPrintsEveryError(t *testing.T) {
 	h := newHarness(t)
 	h.keys.err = &orb.ExitError{Code: 5}
-	if code := h.run("auth", "--clear"); code != 5 {
-		t.Errorf("exit %d, want 5", code)
+	if code := h.run("auth", "--clear"); code != 1 {
+		t.Errorf("exit %d, want 1", code)
+	}
+	if !strings.HasPrefix(h.stderr.String(), "orbit: ") {
+		t.Errorf("stderr = %q, want the error printed", h.stderr.String())
+	}
+}
+
+func TestSilentOrbctlFailurePrints(t *testing.T) {
+	h := newHarness(t)
+	h.orb.Errs["list"] = fmt.Errorf("orbctl list: exited 1 without saying why")
+	if code := h.run("list"); code != 1 || !strings.Contains(h.stderr.String(), "exited 1 without saying why") {
+		t.Errorf("exit %d, stderr %q", code, h.stderr.String())
 	}
 }

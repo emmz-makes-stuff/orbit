@@ -250,6 +250,17 @@ func TestRebuildPicksUpNewExtra(t *testing.T) {
 	}
 }
 
+func TestRebuildKeepsTheVMName(t *testing.T) {
+	f := newFixture(t)
+	vm := vmFor(f.ws, orb.StateRunning)
+	vm.Name = "orbit-made-by-hand"
+	f.withVMs(vm)
+	f.mustRun(t, "rebuild", "--yes", "orbit-made-by-hand")
+	if len(f.orb.Created) != 1 || f.orb.Created[0].Name != "orbit-made-by-hand" {
+		t.Errorf("created = %+v, want the VM recreated under its own name", f.orb.Created)
+	}
+}
+
 func TestRebuildOrphanRefused(t *testing.T) {
 	f := newFixture(t)
 	gone := filepath.Join(f.home, "moved-away")

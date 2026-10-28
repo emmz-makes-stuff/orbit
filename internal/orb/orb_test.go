@@ -127,6 +127,14 @@ func TestErrorsCarryStderr(t *testing.T) {
 	}
 }
 
+func TestSilentOrbctlFailureIsNotAnExitError(t *testing.T) {
+	err := newFake(&fakeRunner{err: &ExitError{Code: 1}}).Start(context.Background(), "m")
+	var exit *ExitError
+	if err == nil || errors.As(err, &exit) || err.Error() != "orbctl start: exited 1 without saying why" {
+		t.Errorf("err = %v", err)
+	}
+}
+
 func TestErrorsWithoutOutputWrapCause(t *testing.T) {
 	cause := errors.New("boom")
 	err := newFake(&fakeRunner{err: cause}).Stop(context.Background(), "m")

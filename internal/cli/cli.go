@@ -3,7 +3,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -96,19 +95,14 @@ func Main(args []string) int {
 	return Run(context.Background(), d, args)
 }
 
-// Run executes the command tree and maps errors to exit codes: a command's own *orb.ExitError
-// passes its code through, anything else prints and exits 1.
+// Run executes the command tree: an error prints and exits 1. (A shell's own exit code reaches the
+// caller directly, because attaching replaces orbit with orbctl.)
 func Run(ctx context.Context, d *Deps, args []string) int {
 	root := NewRoot(d)
 	root.SetArgs(args)
-	err := root.ExecuteContext(ctx)
-	if err == nil {
-		return 0
+	if err := root.ExecuteContext(ctx); err != nil {
+		fmt.Fprintln(d.Stderr, "orbit:", err)
+		return 1
 	}
-	var exit *orb.ExitError
-	if errors.As(err, &exit) {
-		return exit.Code
-	}
-	fmt.Fprintln(d.Stderr, "orbit:", err)
-	return 1
+	return 0
 }
