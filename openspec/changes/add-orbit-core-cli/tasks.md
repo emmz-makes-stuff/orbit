@@ -22,8 +22,8 @@
 
 ## 5. Claude auth
 
-- [ ] 5.1 Implement `internal/keychain.Store` over `security` (Set via `security -i` on stdin, with tokens outside `[A-Za-z0-9_-]+` rejected; Get, where exit 44 means none stored; Clear, with exit 44 treated as success). Verify with unit tests on the commands sent, checking that the token never appears in argv
-- [ ] 5.2 Implement `orbit auth` (stdin when piped, hidden prompt otherwise, empty input rejected, nothing echoed) and `orbit auth --clear`. Verify with command tests covering the `claude-auth` store, empty-input and clear scenarios
+- [x] 5.1 Implement `internal/keychain.Store` over `security` (Set via `security -i` on stdin, with tokens outside `[A-Za-z0-9_-]+` rejected; Get, where exit 44 means none stored; Clear, with exit 44 treated as success). Verify with unit tests on the commands sent, checking that the token never appears in argv
+- [x] 5.2 Implement `orbit auth` (stdin when piped, hidden prompt otherwise, empty input rejected, nothing echoed) and `orbit auth --clear`. Verify with command tests covering the `claude-auth` store, empty-input and clear scenarios
 
 ## 6. Create, provision and attach
 
