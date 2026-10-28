@@ -29,8 +29,17 @@ The workspace directory SHALL be mounted writeable at the same absolute path as 
 
 ### Requirement: Allowlisted extras
 Extras SHALL be declared only in the Mac-only config, globally or per workspace. Each one is a Mac
-path, given as either a read-only copy (the default) or a writeable mount, and appears at the same
-absolute path in the VM. The VM SHALL get nothing else from the Mac.
+path, given as either a read-only copy (the default) or a writeable mount. An extra under the Mac
+home directory appears at the same path relative to the VM user's home, so tools find it at `~`. Any
+other extra appears at the same absolute path. The VM SHALL get nothing else from the Mac.
+
+#### Scenario: Extra under the home directory
+- **WHEN** `~/.gitconfig` is declared as an extra and the VM user's home is `/home/emmz`
+- **THEN** it appears in the VM at `/home/emmz/.gitconfig`, so git in the VM uses it, and any directories created above it there belong to the VM user
+
+#### Scenario: VM home is not where expected
+- **WHEN** a new VM's default user turns out to have a home other than `/home/<Mac user>`, and extras under the Mac home were declared
+- **THEN** provisioning fails, naming both directories, and the VM is kept for inspection
 
 #### Scenario: Writeable extra
 - **WHEN** an extra is declared with mode `rw`
@@ -43,6 +52,10 @@ absolute path in the VM. The VM SHALL get nothing else from the Mac.
 #### Scenario: Per-workspace extra
 - **WHEN** an extra is declared only for `~/github/emmz`
 - **THEN** the `~/github/emmz` VM has it and other workspace VMs do not
+
+#### Scenario: Overlapping extras
+- **WHEN** one extra lies within another, whatever their modes, such as `~/.config` with `~/.config/gh`
+- **THEN** create, rebuild and sync exit non-zero, name both extras, and create or change nothing, because replacing a read-only copy could reach through a mount, or through a symlink in the outer copy, to the Mac
 
 #### Scenario: Missing extra
 - **WHEN** a declared extra does not exist on the Mac at create or rebuild time
@@ -63,6 +76,10 @@ the Mac. The only workspace file `orbit` reads is the setup script, which runs i
 #### Scenario: Config dropped into the workspace
 - **WHEN** a file such as `.orbit/config.toml` declaring `~/.ssh` as an extra is created in the workspace and the VM is rebuilt
 - **THEN** `~/.ssh` is not present in the new VM
+
+#### Scenario: Config directory override
+- **WHEN** `ORBIT_CONFIG_DIR` is set in the Mac environment that runs `orbit`
+- **THEN** `config.toml` and `baseline.sh` are read from that directory instead of `~/.config/orbit`, and nothing in a workspace or a VM can set it
 
 ### Requirement: SSH agent forwarding for git
 Every workspace VM SHALL have the Mac's SSH agent forwarded, so that git over SSH can authenticate

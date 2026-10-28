@@ -41,6 +41,23 @@ destroying them or running from inside one.
 - **WHEN** a workspace VM exists for `~/github/emmz/orbit` and `orbit` runs in `~/github/emmz`
 - **THEN** no VM is created, the error names `~/github/emmz/orbit` and its VM, and the exit code is non-zero
 
+### Requirement: Refuse the home directory as a workspace
+`orbit` SHALL refuse to create a workspace VM for the Mac home directory or any of its ancestors
+(including `/`), because that would expose everything in the home directory to the VM. It SHALL exit
+non-zero and explain why. Subdirectories of the home directory are allowed.
+
+#### Scenario: Run in the home directory
+- **WHEN** `orbit` runs in `~` and no workspace covers it
+- **THEN** no VM is created, the message says it would expose all of `~`, and the exit code is non-zero
+
+#### Scenario: Run in an ancestor of home
+- **WHEN** `orbit` runs in `/` or `/Users`
+- **THEN** no VM is created and the exit code is non-zero
+
+#### Scenario: Subdirectory of home
+- **WHEN** `orbit` runs in `~/github/emmz`
+- **THEN** the workspace VM is created as normal
+
 ### Requirement: Attach opens a shell in the current directory
 Attaching SHALL open an interactive login shell inside the workspace VM, as the default user, with the
 working directory set to the current directory (same path as on the Mac). `orbit` SHALL NOT start
