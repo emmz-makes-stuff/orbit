@@ -151,6 +151,14 @@ empty one.
 *Rejected:* config in the workspace (Claude could widen access), YAML (heavier parser, and
 indentation mistakes in a hand-edited file).
 
+**Override:** if `$ORBIT_CONFIG_DIR` is set, both files are read from it instead of
+`~/.config/orbit`. It lets the integration tests, or anyone trying out a config, use a scratch
+directory without touching the real one. It is read from the environment orbit runs in on the Mac.
+Nothing in a workspace is consulted, and a VM can't set it.
+*Rejected:* a `--config` flag (it has to reach every command, and is easy to forget on one, such as
+`sync` with a different config from the one used at create); redirecting `$HOME` in tests (that also
+moves `~` expansion and the home guard).
+
 ### D8. Read-only extras are copied by a tar stream
 
 On create, rebuild and `orbit sync`, `orbit` runs `tar -C / -cf - <paths relative to />` on the Mac,

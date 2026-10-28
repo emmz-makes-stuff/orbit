@@ -62,6 +62,6 @@
 
 ## 11. Review fixes: docs and nits
 
-- [ ] 11.1 Record the `ORBIT_CONFIG_DIR` override in `design.md ## Decisions` (why: tests and alternative setups; it is read only from the Mac's environment, so a VM can't set it). Add a scenario to the vm-access "Workspace content cannot widen access" requirement
-- [ ] 11.2 On attach, warn "never finished provisioning" only when the marker check exits non-zero. Any other `Run` failure gets its own warning naming the error. Test both
-- [ ] 11.3 README: a known-issue line saying workspaces under `/tmp` or `/var/folders` hit OrbStack's stale-delete behaviour (a VM can't recreate a file the Mac just deleted)
+- [x] 11.1 Record the `ORBIT_CONFIG_DIR` override in `design.md ## Decisions` (why: tests and alternative setups; it is read only from the Mac's environment, so a VM can't set it). Add a scenario to the vm-access "Workspace content cannot widen access" requirement
+- [x] 11.2 On attach, warn "never finished provisioning" only when the marker check exits non-zero. Any other `Run` failure gets its own warning naming the error. Test both
+- [x] 11.3 README: a known-issue line saying workspaces under `/tmp` or `/var/folders` hit OrbStack's stale-delete behaviour (a VM can't recreate a file the Mac just deleted)

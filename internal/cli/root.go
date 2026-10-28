@@ -116,9 +116,12 @@ func (s *session) attach(ctx context.Context, m workspace.Machine, dir string, f
 		}
 	}
 	if !fresh {
-		err := s.client.Run(ctx, orb.RunOptions{Machine: m.Name, Args: []string{"test", "-f", provisionedMarker}})
-		if err != nil {
+		var exit *orb.ExitError
+		switch err := s.client.Run(ctx, orb.RunOptions{Machine: m.Name, Args: []string{"test", "-f", provisionedMarker}}); {
+		case errors.As(err, &exit):
 			s.warn("%s never finished provisioning; `orbit rebuild` recreates it from scratch", m.Name)
+		case err != nil:
+			s.warn("could not check whether %s finished provisioning: %v", m.Name, err)
 		}
 	}
 

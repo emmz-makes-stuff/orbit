@@ -281,6 +281,28 @@ func TestAttachWarnsWhenNeverProvisioned(t *testing.T) {
 	}
 }
 
+func TestAttachMarkerCheckFailureIsNotCalledUnprovisioned(t *testing.T) {
+	f := newFixture(t)
+	name := workspace.Name(f.ws)
+	f.orb = orbtest.New(orb.Machine{Name: name, State: orb.StateRunning, Mounts: []orb.Mount{{Source: f.ws}}})
+	f.orb.OnRun = func(r orbtest.Run) error {
+		if len(r.Args) > 0 && r.Args[0] == "test" {
+			return errors.New("orbctl run: machine is busy")
+		}
+		return f.vm.onRun(r)
+	}
+
+	f.mustRun(t)
+
+	msg := f.stderr.String()
+	if strings.Contains(msg, "never finished provisioning") || !strings.Contains(msg, "machine is busy") {
+		t.Errorf("stderr = %q, want the OrbStack error, not the unprovisioned warning", msg)
+	}
+	if len(f.orb.Shells) != 1 {
+		t.Error("shell not opened")
+	}
+}
+
 func TestOverlapRefused(t *testing.T) {
 	f := newFixture(t)
 	child := filepath.Join(f.ws, "orbit")

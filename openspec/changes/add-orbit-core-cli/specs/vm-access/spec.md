@@ -68,6 +68,10 @@ the Mac. The only workspace file `orbit` reads is the setup script, which runs i
 - **WHEN** a file such as `.orbit/config.toml` declaring `~/.ssh` as an extra is created in the workspace and the VM is rebuilt
 - **THEN** `~/.ssh` is not present in the new VM
 
+#### Scenario: Config directory override
+- **WHEN** `ORBIT_CONFIG_DIR` is set in the Mac environment that runs `orbit`
+- **THEN** `config.toml` and `baseline.sh` are read from that directory instead of `~/.config/orbit`, and nothing in a workspace or a VM can set it
+
 ### Requirement: SSH agent forwarding for git
 Every workspace VM SHALL have the Mac's SSH agent forwarded, so that git over SSH can authenticate
 with the keys loaded on the Mac. Private key files SHALL NOT be copied into the VM.

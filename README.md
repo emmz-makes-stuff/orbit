@@ -195,6 +195,13 @@ What it doesn't, by design:
 Within those limits, running `claude --dangerously-skip-permissions` in an orbit VM puts only the
 workspace and your allowlisted extras at risk, plus whatever your SSH keys and the internet can reach.
 
+## Known issues
+
+- **Workspaces under `/tmp` or `/var/folders`.** In those directories, OrbStack's file sharing won't
+  let a VM create a file with the name of one that the VM had looked at and your Mac then deleted.
+  It fails with "No such file or directory" until the Mac creates that file again, even in a rebuilt
+  VM. Under your home directory, the same thing clears within a second. Keep workspaces under `~`.
+
 ## Development
 
 ```sh
