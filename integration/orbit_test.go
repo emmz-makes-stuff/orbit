@@ -154,7 +154,25 @@ func TestOrbitEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	write(t, roFile, "ro-v1\n")
-	write(t, config.File(e.configDir), fmt.Sprintf("[[extras]]\npath = %q\n\n[[extras]]\npath = %q\nmode = \"rw\"\n", roFile, rwDir))
+	// Extras under the Mac home land under the VM user's home; the ones above keep their path.
+	macHome, _ := os.UserHomeDir()
+	homeDir, err := os.MkdirTemp(macHome, ".orbit-integration-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(homeDir) })
+	homeRel := filepath.Base(homeDir)
+	homeRO := filepath.Join(homeDir, "ro.txt")
+	homeRW := filepath.Join(homeDir, "rw")
+	write(t, homeRO, "home-ro\n")
+	if err := os.MkdirAll(homeRW, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var cfg strings.Builder
+	for _, x := range []struct{ path, mode string }{{roFile, "ro"}, {rwDir, "rw"}, {homeRO, "ro"}, {homeRW, "rw"}} {
+		fmt.Fprintf(&cfg, "[[extras]]\npath = %q\nmode = %q\n\n", x.path, x.mode)
+	}
+	write(t, config.File(e.configDir), cfg.String())
 	write(t, config.BaselinePath(e.configDir),
 		"echo baseline-ran > /var/tmp/orbit-baseline\necho \"$ORBIT_USER\" > /var/tmp/orbit-user\n")
 	// setup.sh appends rather than the test deleting its output before a rebuild: under
@@ -172,7 +190,6 @@ func TestOrbitEndToEnd(t *testing.T) {
 	if _, exists := e.find(name); exists {
 		t.Fatalf("%s already exists; delete it first", name)
 	}
-	macHome, _ := os.UserHomeDir()
 	macUser := filepath.Base(macHome)
 	setupLine := e.ws + " " + macUser + "\n"
 	tokenHash := storedTokenHash(t)
@@ -186,6 +203,9 @@ echo from-vm > vm.txt
 echo "RO=$(cat %[2]q)"
 echo changed-in-vm > %[2]q
 echo rw-from-vm > %[3]q/x
+echo "HOME_RO=$(cat ~/%[4]s/ro.txt)"
+echo home-rw-from-vm > ~/%[4]s/rw/y
+echo "HOME_PARENT_OWNER=$(stat -c %%U ~/%[4]s)"
 echo "BASELINE=$(cat /var/tmp/orbit-baseline)"
 echo "ORBIT_USER=$(cat /var/tmp/orbit-user)"
 if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
@@ -197,9 +217,11 @@ fi
 echo "HTTP=$(curl -sS -o /dev/null -w '%%{http_code}' https://example.com)"
 touch ~/persist
 exit 0
-`, filepath.Join(macHome, "Documents"), roFile, rwDir))
+`, filepath.Join(macHome, "Documents"), roFile, rwDir, homeRel))
 
 	r.want(t, "PWD", e.ws)
+	r.want(t, "HOME_RO", "home-ro")
+	r.want(t, "HOME_PARENT_OWNER", macUser)
 	r.want(t, "WHO", macUser)
 	r.want(t, "MAC_HOME", "hidden")
 	r.want(t, "RO", "ro-v1")
@@ -223,6 +245,9 @@ exit 0
 	}
 	if got := read(t, filepath.Join(rwDir, "x")); got != "rw-from-vm\n" {
 		t.Errorf("rw extra: Mac sees %q", got)
+	}
+	if got := read(t, filepath.Join(homeRW, "y")); got != "home-rw-from-vm\n" {
+		t.Errorf("rw extra under ~, written as ~/%s/rw/y in the VM: Mac sees %q", homeRel, got)
 	}
 
 	t.Log("2. list")

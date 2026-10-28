@@ -24,6 +24,14 @@ type Mount struct {
 	Destination string `json:"destination,omitempty"`
 }
 
+// Target is where the mount appears in the machine.
+func (m Mount) Target() string {
+	if m.Destination == "" {
+		return m.Source
+	}
+	return m.Destination
+}
+
 // Machine is an OrbStack machine as `orbctl list -f json` reports it.
 type Machine struct {
 	Name  string
@@ -42,8 +50,8 @@ const (
 type CreateOptions struct {
 	Name   string
 	Distro string
-	// Mounts are host paths, each shared writeable at the same path in the machine. Order is kept.
-	Mounts []string
+	// Mounts are shared writeable, each at its Destination (its Source when empty). Order is kept.
+	Mounts []Mount
 	CPUs   int
 	Memory string
 	Disk   string
@@ -170,7 +178,7 @@ func createArgs(opts CreateOptions) []string {
 	args := []string{"create", "--isolated", "--forward-ssh-agent"}
 	for _, m := range opts.Mounts {
 		// Without an explicit DEST, OrbStack mounts under /mnt/mac/ instead of at the same path.
-		args = append(args, "--mount", m+":"+m)
+		args = append(args, "--mount", m.Source+":"+m.Target())
 	}
 	if opts.CPUs > 0 {
 		args = append(args, "--cpus", strconv.Itoa(opts.CPUs))

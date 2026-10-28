@@ -244,8 +244,8 @@ func TestRebuildPicksUpNewExtra(t *testing.T) {
 	mkdir(t, notes)
 	f.config(t, "[[extras]]\npath = \"~/notes\"\nmode = \"rw\"\n")
 	f.mustRun(t, "rebuild", "--yes")
-	if got := f.orb.Created[0].Mounts; !reflect.DeepEqual(got, []string{f.ws, notes}) {
-		t.Errorf("mounts = %q", got)
+	if got := f.orb.Created[0].Mounts; !reflect.DeepEqual(got, []orb.Mount{{Source: f.ws}, {Source: notes, Destination: f.vm.home + "/notes"}}) {
+		t.Errorf("mounts = %v", got)
 	}
 }
 
@@ -300,7 +300,7 @@ func TestSyncRecopiesReadOnlyExtras(t *testing.T) {
 
 	f.mustRun(t, "sync")
 
-	if want := map[string]string{strings.TrimPrefix(cfg, "/"): "v2\n"}; !reflect.DeepEqual(f.vm.copied, want) {
+	if want := map[string]string{strings.TrimPrefix(f.vm.home, "/") + "/.gitconfig": "v2\n"}; !reflect.DeepEqual(f.vm.copied, want) {
 		t.Errorf("copied = %v, want only the ro extra, current contents", f.vm.copied)
 	}
 	for _, r := range f.orb.Runs {

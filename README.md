@@ -94,7 +94,7 @@ cpus = 4                   # resource limits; unset means OrbStack's shared defa
 memory = "8G"
 disk = "64G"
 
-# Extras: Mac paths a VM may see, at the same path. Global ones go to every workspace VM.
+# Extras: Mac paths a VM may see. Global ones go to every workspace VM.
 [[extras]]
 path = "~/.gitconfig"      # mode defaults to "ro": copied in, changes in the VM never reach the Mac
 
@@ -109,6 +109,9 @@ mode = "rw"                # mounted writeable: changes in the VM appear on the 
 ```
 
 - Paths start with `~/` or are absolute. They can't contain `:` or `,`.
+- **Extras under `~` appear under the VM user's home**, at the same place relative to it: `~/.gitconfig`
+  becomes `/home/<you>/.gitconfig` in the VM, so git finds it. Extras elsewhere, and the workspace
+  itself, appear at exactly their Mac path.
 - An extra can't overlap the workspace itself. Nor can one extra sit inside another when either of
   the two is `rw` (e.g. `~/.config` plus `~/.config/gh` as `rw`), because refreshing the read-only
   copy would reach through the mount to your Mac. Nested read-only extras are fine.

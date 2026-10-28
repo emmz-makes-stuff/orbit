@@ -169,6 +169,22 @@ written to.
 *Rejected:* a read-only remount inside the VM (sudo in the VM can undo it), and `orb push`
 (one file at a time, and less control over ownership).
 
+**Where extras land (code review fix):** an isolated VM's default user has its home at
+`/home/<user>`, and `/Users` doesn't exist there, so an extra copied to its Mac path (say
+`/Users/emmz/.gitconfig`) is invisible to tools. An extra under the Mac home is therefore placed at
+the same path relative to the VM home (`/home/emmz/.gitconfig`). Copies go there in the tar stream,
+and rw extras use `--mount SRC:DEST`. Any other extra, and the workspace, keep their Mac path.
+`--mount` needs DEST before the VM exists, so orbit assumes `/home/<Mac user>`. Provisioning then
+checks the real home with `getent passwd`, and fails if it differs and an extra was mapped. Directories
+created above an extra under the VM home are given to the default user, and only those directories,
+without recursing. A mount under the home makes OrbStack create the home as root before the user
+exists, so the home is root-owned and `/etc/skel` is never copied (verified on OrbStack 2.2.4). In
+that case provisioning repairs the home first: it copies in the missing skel files, chowns whatever
+root owns there using `find -xdev`, so nothing inside a mount (and so nothing on the Mac) is touched,
+and sets mode 750.
+*Rejected:* moving the VM user's home to `/Users/<user>`, which matches every path but fights
+OrbStack's defaults.
+
 ### D9. Provisioning: orbit runs the scripts with `orbctl run`, not cloud-init
 
 After creation, `orbit` pipes `baseline.sh` into `orbctl run -m <name> -u root bash -s` and streams its

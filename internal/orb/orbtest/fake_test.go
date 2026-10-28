@@ -14,7 +14,7 @@ func TestFakeLifecycle(t *testing.T) {
 	ctx := context.Background()
 	f := New(orb.Machine{Name: "ubuntu", State: orb.StateStopped})
 
-	if err := f.Create(ctx, orb.CreateOptions{Name: "orbit-w-123456", Mounts: []string{"/w"}}); err != nil {
+	if err := f.Create(ctx, orb.CreateOptions{Name: "orbit-w-123456", Mounts: []orb.Mount{{Source: "/w"}}}); err != nil {
 		t.Fatal(err)
 	}
 	m, ok := f.Machine("orbit-w-123456")

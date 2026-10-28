@@ -65,3 +65,24 @@
 - [x] 11.1 Record the `ORBIT_CONFIG_DIR` override in `design.md ## Decisions` (why: tests and alternative setups; it is read only from the Mac's environment, so a VM can't set it). Add a scenario to the vm-access "Workspace content cannot widen access" requirement
 - [x] 11.2 On attach, warn "never finished provisioning" only when the marker check exits non-zero. Any other `Run` failure gets its own warning naming the error. Test both
 - [x] 11.3 README: a known-issue line saying workspaces under `/tmp` or `/var/folders` hit OrbStack's stale-delete behaviour (a VM can't recreate a file the Mac just deleted)
+
+## 12. Review fixes: extras reach the VM user's home
+
+- [x] 12.1 Map extras under the Mac home to the VM user's home: `~/<rel>` appears at `<vm home>/<rel>`, while other extras and the workspace keep their Mac path. Writeable ones are mounted with `--mount SRC:DEST`. The VM home is taken as `/home/<mac user>` at create, because orbctl needs DEST before the VM exists, and provisioning fails clearly if `getent passwd` says otherwise. Update the vm-access spec, design.md D8, the README and tests
+- [x] 12.2 Missing parent directories of a copied extra under the VM home are owned by the default user, not root. Parents outside the home stay root-owned
+- [x] 12.3 Integration test: assert the ro extra is readable as `~/<rel>` and the rw extra writeable as `~/<rel>` from the VM shell
+
+## 13. Review fixes: copy and sync safety
+
+- [ ] 13.1 Refuse any extra that lies within another, whatever their modes. Update the vm-access "Overlapping extras" scenario and the README, and flip `TestNestedReadOnlyExtrasAllowed`
+- [ ] 13.2 `orbit sync` checks each copy's VM path against the VM's actual mounts (from `orbctl list`), and refuses if a copy would overlap a live mount, telling the user to rebuild. Test: created with an rw extra, config changed to ro, then sync is refused
+- [ ] 13.3 Skip sockets in read-only copies, with a warning naming each one, instead of failing the copy
+- [ ] 13.4 Only a not-exist error means there is no `.orbit/setup.sh`. Any other `Stat` error fails provisioning
+
+## 14. Review fixes: errors and cleanup
+
+- [ ] 14.1 orbctl's own failures always print an `orbit:` message: `orb.output` stops wrapping `*ExitError`, and `cli.Run` drops the passthrough it no longer needs. Test a silent orbctl failure
+- [ ] 14.2 On attach, only exit 1 from the marker check means "never finished provisioning". Any other exit code gets the "could not check" warning
+- [ ] 14.3 `rebuild` keeps the VM's existing name
+- [ ] 14.4 `defaultUser` gets a clear message when `id -un` prints nothing
+- [ ] 14.5 `targetCmd` and `confirmedCmd` share one resolve-and-run path

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -22,8 +23,10 @@ type plan struct {
 	name      string
 	workspace string
 	cfg       *config.Config
-	mounts    []string // workspace first, then writeable extras
-	copies    []string // read-only extras
+	// vmHome is where the default user's home is expected; extras under the Mac home go there.
+	vmHome string
+	mounts []orb.Mount // workspace first, then writeable extras
+	copies []orb.Mount // read-only extras: Mac path to VM path
 }
 
 func (s *session) planFor(ws string) (*plan, error) {
@@ -38,15 +41,94 @@ func (s *session) planFor(ws string) (*plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	mounts, copies, err := s.splitExtras(cfg, ws)
+	rw, ro, err := s.splitExtras(cfg, ws)
 	if err != nil {
 		return nil, fmt.Errorf("%w; nothing was created", err)
 	}
-	return &plan{name: workspace.Name(ws), workspace: ws, cfg: cfg, mounts: append([]string{ws}, mounts...), copies: copies}, nil
+	vmHome := s.assumedVMHome()
+	return &plan{
+		name: workspace.Name(ws), workspace: ws, cfg: cfg, vmHome: vmHome,
+		mounts: append([]orb.Mount{{Source: ws}}, s.place(rw, vmHome)...),
+		copies: s.place(ro, vmHome),
+	}, nil
 }
 
-// splitExtras checks ws's extras and splits them into writeable mounts and read-only copies.
-func (s *session) splitExtras(cfg *config.Config, ws string) (mounts, copies []string, err error) {
+// assumedVMHome is where OrbStack puts the default user's home, the user being named after the Mac
+// user. Mounts need their destination before the VM exists, so provisioning checks it afterwards.
+func (s *session) assumedVMHome() string { return "/home/" + filepath.Base(s.d.Home) }
+
+// place maps Mac paths to where they appear in the VM: paths under the Mac home go under vmHome,
+// so tools find them at ~; anything else keeps its path.
+func (s *session) place(paths []string, vmHome string) []orb.Mount {
+	out := make([]orb.Mount, len(paths))
+	for i, p := range paths {
+		out[i] = orb.Mount{Source: p, Destination: p}
+		if rel, ok := underHome(p, s.d.Home); ok {
+			out[i].Destination = path.Join(vmHome, rel)
+		}
+	}
+	return out
+}
+
+// mapsHome reports whether any of ms was placed under the VM home rather than at its own path.
+func mapsHome(ms []orb.Mount) bool {
+	for _, m := range ms {
+		if m.Target() != m.Source {
+			return true
+		}
+	}
+	return false
+}
+
+// underHome returns p relative to home, if p lies beneath it.
+func underHome(p, home string) (string, bool) {
+	if p == home || !workspace.Within(p, home) {
+		return "", false
+	}
+	return strings.TrimPrefix(p, home+"/"), true
+}
+
+// homeParents lists the directories strictly between vmHome and each destination beneath it,
+// outermost first, without duplicates.
+func homeParents(vmHome string, dsts []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, d := range dsts {
+		var chain []string
+		for dir := path.Dir(d); dir != vmHome && workspace.Within(dir, vmHome); dir = path.Dir(dir) {
+			chain = append([]string{dir}, chain...)
+		}
+		for _, dir := range chain {
+			if !seen[dir] {
+				seen[dir] = true
+				out = append(out, dir)
+			}
+		}
+	}
+	return out
+}
+
+// repairHomeScript fixes the home that OrbStack makes when a mount lands inside it: it creates the
+// mount point as root before the user exists, so the home is root's and /etc/skel was never copied.
+// find -xdev keeps the chown on the VM's own disk, out of the mounts and so off the Mac.
+func repairHomeScript(user, home string) string {
+	h, u := shellQuote(home), shellQuote(user)
+	return fmt.Sprintf("set -e; if [ -d /etc/skel ]; then cp -Rn /etc/skel/. %s/; fi; "+
+		"find %s -xdev -user root -exec chown -h %s: {} +; chmod 750 %s", h, h, u, h)
+}
+
+// ownDirsScript creates dirs and gives each to user, without recursing into them: a dir that tar
+// or OrbStack would otherwise create would be root's, and the user couldn't write next to an extra.
+func ownDirsScript(user string, dirs []string) string {
+	if len(dirs) == 0 {
+		return ""
+	}
+	list := quoteAll(dirs)
+	return fmt.Sprintf("mkdir -p -- %s; chown -h %s -- %s; ", list, shellQuote(user), list)
+}
+
+// splitExtras checks ws's extras and splits their Mac paths into writeable and read-only ones.
+func (s *session) splitExtras(cfg *config.Config, ws string) (rw, ro []string, err error) {
 	extras := cfg.ExtrasFor(ws)
 	for i, e := range extras {
 		if ws != "" && overlaps(e.Path, ws) { // "" is a VM that lost its workspace mount
@@ -66,12 +148,12 @@ func (s *session) splitExtras(cfg *config.Config, ws string) (mounts, copies []s
 				e.Path, config.File(s.d.ConfigDir))
 		}
 		if e.Mode == config.ModeRW {
-			mounts = append(mounts, e.Path)
+			rw = append(rw, e.Path)
 		} else {
-			copies = append(copies, e.Path)
+			ro = append(ro, e.Path)
 		}
 	}
-	return mounts, copies, nil
+	return rw, ro, nil
 }
 
 // overlaps reports whether either path lies within the other.
@@ -111,13 +193,23 @@ func (s *session) build(ctx context.Context, p *plan) (string, error) {
 // provision copies read-only extras, runs the baseline as root and then the workspace setup as
 // the default user, and finally marks the VM provisioned.
 func (s *session) provision(ctx context.Context, p *plan) error {
-	user, err := s.defaultUser(ctx, p.name)
+	user, home, err := s.vmUser(ctx, p.name)
 	if err != nil {
 		return err
 	}
+	if home != p.vmHome && (mapsHome(p.mounts) || mapsHome(p.copies)) {
+		return fmt.Errorf("%s's home directory is %s, not %s as orbit expected, so extras under your Mac "+
+			"home would be in the wrong place; `orbit destroy` it and report this", p.name, home, p.vmHome)
+	}
+	if mapsHome(p.mounts) {
+		err := s.client.Run(ctx, orb.RunOptions{Machine: p.name, User: "root", Args: []string{"sh", "-c", repairHomeScript(user, home)}})
+		if err != nil {
+			return fmt.Errorf("repair %s's home directory in %s: %v", user, p.name, err)
+		}
+	}
 	if len(p.copies) > 0 {
 		s.info("copying %d read-only extra(s)", len(p.copies))
-		if err := copyExtras(ctx, s.client, p.name, user, p.copies); err != nil {
+		if err := copyExtras(ctx, s.client, p.name, user, home, p.copies); err != nil {
 			return err
 		}
 	}
@@ -174,13 +266,19 @@ func scriptError(script string, err error) error {
 	return fmt.Errorf("provisioning failed: %s: %v", script, err)
 }
 
-// defaultUser asks the VM who its default user is, for ownership of copied extras.
-func (s *session) defaultUser(ctx context.Context, machine string) (string, error) {
+// vmUserScript prints the default user's name and home directory, one per line.
+const vmUserScript = `u=$(id -un) && echo "$u" && getent passwd "$u" | cut -d: -f6`
+
+// vmUser asks the VM for its default user and that user's home, for placing and owning extras.
+func (s *session) vmUser(ctx context.Context, machine string) (user, home string, err error) {
 	var out strings.Builder
-	err := s.client.Run(ctx, orb.RunOptions{Machine: machine, Args: []string{"id", "-un"}, Stdout: &out})
-	user := strings.TrimSpace(out.String())
-	if err != nil || user == "" {
-		return "", fmt.Errorf("find the default user in %s: %v", machine, err)
+	if err := s.client.Run(ctx, orb.RunOptions{Machine: machine, Args: []string{"sh", "-c", vmUserScript}, Stdout: &out}); err != nil {
+		return "", "", fmt.Errorf("find the default user in %s: %v", machine, err)
 	}
-	return user, nil
+	fields := strings.Fields(out.String())
+	if len(fields) != 2 {
+		return "", "", fmt.Errorf("find the default user in %s: expected a name and a home directory, got %q",
+			machine, strings.TrimSpace(out.String()))
+	}
+	return fields[0], fields[1], nil
 }

@@ -29,8 +29,17 @@ The workspace directory SHALL be mounted writeable at the same absolute path as 
 
 ### Requirement: Allowlisted extras
 Extras SHALL be declared only in the Mac-only config, globally or per workspace. Each one is a Mac
-path, given as either a read-only copy (the default) or a writeable mount, and appears at the same
-absolute path in the VM. The VM SHALL get nothing else from the Mac.
+path, given as either a read-only copy (the default) or a writeable mount. An extra under the Mac
+home directory appears at the same path relative to the VM user's home, so tools find it at `~`. Any
+other extra appears at the same absolute path. The VM SHALL get nothing else from the Mac.
+
+#### Scenario: Extra under the home directory
+- **WHEN** `~/.gitconfig` is declared as an extra and the VM user's home is `/home/emmz`
+- **THEN** it appears in the VM at `/home/emmz/.gitconfig`, so git in the VM uses it, and any directories created above it there belong to the VM user
+
+#### Scenario: VM home is not where expected
+- **WHEN** a new VM's default user turns out to have a home other than `/home/<Mac user>`, and extras under the Mac home were declared
+- **THEN** provisioning fails, naming both directories, and the VM is kept for inspection
 
 #### Scenario: Writeable extra
 - **WHEN** an extra is declared with mode `rw`

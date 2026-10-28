@@ -94,8 +94,8 @@ func (f *Fake) Create(_ context.Context, opts orb.CreateOptions) error {
 	}
 	f.Created = append(f.Created, opts)
 	m := &orb.Machine{Name: opts.Name, State: orb.StateRunning}
-	for _, p := range opts.Mounts {
-		m.Mounts = append(m.Mounts, orb.Mount{Source: p, Destination: p})
+	for _, mt := range opts.Mounts {
+		m.Mounts = append(m.Mounts, orb.Mount{Source: mt.Source, Destination: mt.Target()})
 	}
 	f.machines[opts.Name] = m
 	return nil

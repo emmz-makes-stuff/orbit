@@ -74,7 +74,7 @@ func TestCreateArgs(t *testing.T) {
 	err := newFake(f).Create(context.Background(), CreateOptions{
 		Name:   "orbit-emmz-abc123",
 		Distro: "ubuntu:24.04",
-		Mounts: []string{"/Users/e/github/emmz", "/Users/e/notes"},
+		Mounts: []Mount{{Source: "/Users/e/github/emmz"}, {Source: "/Users/e/notes", Destination: "/home/e/notes"}},
 		CPUs:   4,
 		Memory: "8G",
 		Disk:   "64G",
@@ -84,7 +84,7 @@ func TestCreateArgs(t *testing.T) {
 	}
 	want := []string{"create", "--isolated", "--forward-ssh-agent",
 		"--mount", "/Users/e/github/emmz:/Users/e/github/emmz",
-		"--mount", "/Users/e/notes:/Users/e/notes",
+		"--mount", "/Users/e/notes:/home/e/notes",
 		"--cpus", "4", "--memory", "8G", "--disk", "64G",
 		"ubuntu:24.04", "orbit-emmz-abc123"}
 	if !reflect.DeepEqual(f.calls[0], want) {
@@ -93,7 +93,7 @@ func TestCreateArgs(t *testing.T) {
 }
 
 func TestCreateArgsOmitUnsetLimits(t *testing.T) {
-	got := createArgs(CreateOptions{Name: "n", Distro: "ubuntu", Mounts: []string{"/w"}})
+	got := createArgs(CreateOptions{Name: "n", Distro: "ubuntu", Mounts: []Mount{{Source: "/w"}}})
 	want := []string{"create", "--isolated", "--forward-ssh-agent", "--mount", "/w:/w", "ubuntu", "n"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("args = %q, want %q", got, want)

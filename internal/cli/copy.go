@@ -8,35 +8,36 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/emmz-makes-stuff/orbit/internal/orb"
 )
 
-// copyExtras replaces each path's copy in the machine with the Mac's current contents, owned by
-// user. The Mac side is only read. A path that is itself a symlink is copied as what it points to,
-// so a symlinked dotfile arrives as a file at its declared path; symlinks inside directories are
-// kept as symlinks.
-func copyExtras(ctx context.Context, client orb.Client, machine, user string, paths []string) error {
-	if len(paths) == 0 {
+// copyExtras replaces each copy's Destination in the machine with the current contents of its Mac
+// Source, owned by user, as are any directories it needs under home. The Mac side is only read. A
+// source that is itself a symlink is copied as what it points to, so a symlinked dotfile arrives as
+// a file; symlinks inside directories are kept as symlinks.
+func copyExtras(ctx context.Context, client orb.Client, machine, user, home string, copies []orb.Mount) error {
+	if len(copies) == 0 {
 		return nil
 	}
 	pr, pw := io.Pipe()
 	archived := make(chan error, 1)
 	go func() {
-		err := writeTar(pw, paths)
+		err := writeTar(pw, copies)
 		pw.CloseWithError(err)
 		archived <- err
 	}()
 
-	quoted := make([]string, len(paths))
-	for i, p := range paths {
-		quoted[i] = shellQuote(p)
+	dsts := make([]string, len(copies))
+	for i, c := range copies {
+		dsts[i] = c.Target()
 	}
-	list := strings.Join(quoted, " ")
-	script := fmt.Sprintf("set -e; rm -rf -- %s; tar -C / -xpf -; chown -R -h %s -- %s",
-		list, shellQuote(user), list)
+	list := quoteAll(dsts)
+	script := fmt.Sprintf("set -e; %srm -rf -- %s; tar -C / -xpf -; chown -R -h %s -- %s",
+		ownDirsScript(user, homeParents(home, dsts)), list, shellQuote(user), list)
 
 	var stderr strings.Builder
 	err := client.Run(ctx, orb.RunOptions{
@@ -58,19 +59,19 @@ func copyExtras(ctx context.Context, client orb.Client, machine, user string, pa
 	return nil
 }
 
-// writeTar archives each absolute path under its own name, relative to /.
-func writeTar(w io.Writer, paths []string) error {
+// writeTar archives each copy's Source under its Destination, relative to /.
+func writeTar(w io.Writer, copies []orb.Mount) error {
 	tw := tar.NewWriter(w)
-	for _, p := range paths {
-		if err := addPath(tw, p); err != nil {
+	for _, c := range copies {
+		if err := addPath(tw, c.Source, c.Target()); err != nil {
 			return err
 		}
 	}
 	return tw.Close()
 }
 
-func addPath(tw *tar.Writer, declared string) error {
-	// Follow a top-level symlink: the VM gets the target's contents at the declared path.
+func addPath(tw *tar.Writer, declared, dst string) error {
+	// Follow a top-level symlink: the VM gets the target's contents at the destination.
 	root, err := filepath.EvalSymlinks(declared)
 	if err != nil {
 		return err
@@ -87,7 +88,7 @@ func addPath(tw *tar.Writer, declared string) error {
 		if err != nil {
 			return err
 		}
-		name := strings.TrimPrefix(filepath.Join(declared, rel), "/")
+		name := strings.TrimPrefix(path.Join(dst, filepath.ToSlash(rel)), "/")
 
 		link := ""
 		if info.Mode()&fs.ModeSymlink != 0 {
@@ -119,6 +120,15 @@ func addPath(tw *tar.Writer, declared string) error {
 		_, err = io.Copy(tw, f)
 		return err
 	})
+}
+
+// quoteAll quotes each of ss for POSIX sh and joins them with spaces.
+func quoteAll(ss []string) string {
+	quoted := make([]string, len(ss))
+	for i, s := range ss {
+		quoted[i] = shellQuote(s)
+	}
+	return strings.Join(quoted, " ")
 }
 
 // shellQuote quotes s for POSIX sh.

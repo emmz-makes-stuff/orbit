@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -20,12 +21,15 @@ import (
 // vm simulates what runs inside a machine, by recognising the commands orbit sends.
 type vm struct {
 	user        string
+	home        string
 	provisioned bool
 	setupExit   int
 	baseExit    int
 	// steps records provisioning in order: "copy", "baseline", "setup", "marker".
 	steps  []string
 	copied map[string]string // tar entry name -> contents ("<dir>" or "-> target" for links)
+	// copyScript and repairHomeScript are the last copy and home-repair scripts run as root.
+	copyScript, repairHomeScript string
 	// baselineInput is what was piped to the baseline step; baselineUser is its ORBIT_USER.
 	baselineInput string
 	baselineUser  string
@@ -34,8 +38,8 @@ type vm struct {
 func (v *vm) onRun(r orbtest.Run) error {
 	args := r.Args
 	switch {
-	case reflect.DeepEqual(args, []string{"id", "-un"}):
-		_, _ = io.WriteString(r.Stdout, v.user+"\n")
+	case reflect.DeepEqual(args, []string{"sh", "-c", vmUserScript}):
+		_, _ = io.WriteString(r.Stdout, v.user+"\n"+v.home+"\n")
 	case len(args) == 3 && args[0] == "test" && args[2] == provisionedMarker:
 		if !v.provisioned {
 			return &orb.ExitError{Code: 1}
@@ -43,6 +47,10 @@ func (v *vm) onRun(r orbtest.Run) error {
 	case len(args) >= 3 && args[0] == "sh" && strings.Contains(args[2], "tar -C / -xpf -"):
 		v.steps = append(v.steps, "copy")
 		v.copied = readTar(r.Input)
+		v.copyScript = args[2]
+	case len(args) == 3 && args[0] == "sh" && strings.Contains(args[2], "/etc/skel"):
+		v.steps = append(v.steps, "repair-home")
+		v.repairHomeScript = args[2]
 	case len(args) == 5 && args[0] == "env" && args[2] == "sh" && strings.Contains(args[4], "bash -s"):
 		v.steps = append(v.steps, "baseline")
 		v.baselineInput = r.Input
@@ -97,7 +105,7 @@ func newFixture(t *testing.T) *fixture {
 	home := config.Canonical(t.TempDir())
 	ws := filepath.Join(home, "github", "emmz")
 	mkdir(t, ws)
-	f := &fixture{harness: h, home: home, ws: ws, vm: &vm{user: "emmz"}}
+	f := &fixture{harness: h, home: home, ws: ws, vm: &vm{user: "emmz", home: "/home/" + filepath.Base(home)}}
 	h.deps.Home = home
 	h.deps.ConfigDir = config.Dir(home)
 	h.deps.Getwd = func() (string, error) { return ws, nil }
@@ -156,8 +164,8 @@ func TestFirstRunCreatesProvisionsAndAttaches(t *testing.T) {
 	if len(f.orb.Created) != 1 || f.orb.Created[0].Name != name {
 		t.Fatalf("created = %+v, want one VM named %s", f.orb.Created, name)
 	}
-	if got := f.orb.Created[0].Mounts; !reflect.DeepEqual(got, []string{f.ws}) {
-		t.Errorf("mounts = %q, want just the workspace", got)
+	if got := f.orb.Created[0].Mounts; !reflect.DeepEqual(got, []orb.Mount{{Source: f.ws}}) {
+		t.Errorf("mounts = %v, want just the workspace, at its own path", got)
 	}
 	if want := []string{"baseline", "setup", "marker"}; !reflect.DeepEqual(f.vm.steps, want) {
 		t.Errorf("provisioning steps = %q, want %q", f.vm.steps, want)
@@ -372,21 +380,27 @@ mode = "rw"
 `)
 	f.mustRun(t)
 
-	if got, want := f.orb.Created[0].Mounts, []string{f.ws, rw}; !reflect.DeepEqual(got, want) {
-		t.Errorf("mounts = %q, want workspace first, then rw extras: %q", got, want)
+	vmHome := f.vm.home
+	if got, want := f.orb.Created[0].Mounts, []orb.Mount{{Source: f.ws}, {Source: rw, Destination: vmHome + "/notes"}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("mounts = %v, want workspace first at its own path, then rw extras under the VM home: %v", got, want)
 	}
-	rel := func(p string) string { return strings.TrimPrefix(p, "/") }
+	// Extras under the Mac home land under the VM home, where tools look for them.
+	rel := func(p string) string { return strings.TrimPrefix(vmHome+"/"+p, "/") }
 	want := map[string]string{
-		rel(filepath.Join(f.home, ".gitconfig")):                   "[user]\n", // symlink dereferenced
-		rel(filepath.Join(f.home, ".config", "tool")) + "/":        "<dir>",
-		rel(filepath.Join(f.home, ".config", "tool", "a.toml")):    "a=1\n",
-		rel(filepath.Join(f.home, ".config", "tool", "link.toml")): "-> a.toml", // inner link kept
+		rel(".gitconfig"):             "[user]\n", // symlink dereferenced
+		rel(".config/tool") + "/":     "<dir>",
+		rel(".config/tool/a.toml"):    "a=1\n",
+		rel(".config/tool/link.toml"): "-> a.toml", // inner link kept
+	}
+	if !strings.Contains(f.vm.copyScript, "mkdir -p -- '"+vmHome+"/.config'; chown -h 'emmz' -- '"+vmHome+"/.config'") {
+		t.Errorf("copy script doesn't give the user the parent it creates under the VM home: %q", f.vm.copyScript)
 	}
 	if !reflect.DeepEqual(f.vm.copied, want) {
 		t.Errorf("copied =\n  %v\nwant\n  %v", f.vm.copied, want)
 	}
-	if f.vm.steps[0] != "copy" {
-		t.Errorf("steps = %q, want copy first", f.vm.steps)
+	// ~/notes is mounted under the VM home, so the home is repaired before anything goes in it.
+	if want := []string{"repair-home", "copy", "marker"}; !reflect.DeepEqual(f.vm.steps, want) {
+		t.Errorf("steps = %q, want %q", f.vm.steps, want)
 	}
 	for _, r := range f.orb.Runs {
 		if len(r.Args) == 3 && strings.Contains(r.Args[2], "tar -C /") {
@@ -396,6 +410,64 @@ mode = "rw"
 			}
 		}
 	}
+}
+
+func TestMountUnderVMHomeRepairsHome(t *testing.T) {
+	f := newFixture(t)
+	mkdir(t, filepath.Join(f.home, ".config", "gh"))
+	f.config(t, "[[extras]]\npath = \"~/.config/gh\"\nmode = \"rw\"\n")
+	f.mustRun(t)
+	if f.vm.steps[0] != "repair-home" {
+		t.Fatalf("steps = %q, want the home repaired first", f.vm.steps)
+	}
+	h := shellQuote(f.vm.home)
+	for _, want := range []string{"cp -Rn /etc/skel/. " + h + "/", "find " + h + " -xdev -user root -exec chown -h 'emmz': {} +", "chmod 750 " + h} {
+		if !strings.Contains(f.vm.repairHomeScript, want) {
+			t.Errorf("script = %q, want %q", f.vm.repairHomeScript, want)
+		}
+	}
+}
+
+func TestNoHomeRepairWithoutMountsUnderHome(t *testing.T) {
+	f := newFixture(t)
+	writeFile(t, filepath.Join(f.home, ".gitconfig"), "g\n")
+	f.config(t, "[[extras]]\npath = \"~/.gitconfig\"\n")
+	f.mustRun(t)
+	if f.vm.repairHomeScript != "" {
+		t.Errorf("home repaired with only a copy under it: %q", f.vm.repairHomeScript)
+	}
+}
+
+func TestExtraOutsideHomeKeepsItsPath(t *testing.T) {
+	f := newFixture(t)
+	shared := filepath.Join(config.Canonical(t.TempDir()), "shared")
+	mkdir(t, shared)
+	f.config(t, fmt.Sprintf("[[extras]]\npath = %q\nmode = \"rw\"\n", shared))
+	f.mustRun(t)
+	if got := f.orb.Created[0].Mounts[1]; got.Target() != shared {
+		t.Errorf("mount = %v, want it at its Mac path", got)
+	}
+}
+
+func TestUnexpectedVMHomeFailsWhenExtrasAreMapped(t *testing.T) {
+	f := newFixture(t)
+	writeFile(t, filepath.Join(f.home, ".gitconfig"), "g\n")
+	f.config(t, "[[extras]]\npath = \"~/.gitconfig\"\n")
+	expected := f.vm.home
+	f.vm.home = "/srv/emmz"
+	if code := f.run(); code == 0 {
+		t.Fatal("want non-zero exit")
+	}
+	msg := f.stderr.String()
+	if !strings.Contains(msg, "/srv/emmz") || !strings.Contains(msg, expected) || len(f.orb.Shells) != 0 {
+		t.Errorf("stderr = %q, shells = %d", msg, len(f.orb.Shells))
+	}
+}
+
+func TestUnexpectedVMHomeIsFineWithoutHomeExtras(t *testing.T) {
+	f := newFixture(t)
+	f.vm.home = "/srv/emmz"
+	f.mustRun(t)
 }
 
 func TestMissingExtraCreatesNothing(t *testing.T) {

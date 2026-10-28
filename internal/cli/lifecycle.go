@@ -161,11 +161,11 @@ func runSync(ctx context.Context, s *session, m workspace.Machine) error {
 	if err != nil {
 		return err
 	}
-	_, copies, err := s.splitExtras(cfg, m.Workspace)
+	_, ro, err := s.splitExtras(cfg, m.Workspace)
 	if err != nil {
 		return fmt.Errorf("%w; nothing was synced", err)
 	}
-	if len(copies) == 0 {
+	if len(ro) == 0 {
 		fmt.Fprintf(s.d.Stdout, "%s has no read-only extras to sync.\n", m.Name)
 		return nil
 	}
@@ -175,11 +175,12 @@ func runSync(ctx context.Context, s *session, m workspace.Machine) error {
 			return fmt.Errorf("start %s: %w", m.Name, err)
 		}
 	}
-	user, err := s.defaultUser(ctx, m.Name)
+	user, home, err := s.vmUser(ctx, m.Name)
 	if err != nil {
 		return err
 	}
-	if err := copyExtras(ctx, s.client, m.Name, user, copies); err != nil {
+	copies := s.place(ro, home)
+	if err := copyExtras(ctx, s.client, m.Name, user, home, copies); err != nil {
 		return err
 	}
 	fmt.Fprintf(s.d.Stdout, "Synced %d read-only extra(s) into %s.\n", len(copies), m.Name)
