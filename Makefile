@@ -10,6 +10,7 @@ SHELL := /bin/bash
 export PATH := $(shell go env GOPATH 2>/dev/null)/bin:$(PATH)
 
 CHANGES := $(notdir $(patsubst %/,%,$(filter-out %/archive/,$(wildcard openspec/changes/*/))))
+SPECS := $(wildcard openspec/specs/*/spec.md)
 
 .PHONY: build test format lint validate changes gates deps
 
@@ -25,12 +26,13 @@ format:
 lint:
 	@go vet ./... && staticcheck ./...; code=$$?; echo "LINT_EXIT:$$code"; exit $$code
 
-# Validates every active change. No active change is a failure, not a silent pass.
+# Validates the main specs and every active change. Having neither is a failure, not a silent pass.
 validate:
 	@fail=0; \
-	if [ -z "$(CHANGES)" ]; then \
-		echo "no active change found under openspec/changes/"; fail=1; \
+	if [ -z "$(CHANGES)" ] && [ -z "$(SPECS)" ]; then \
+		echo "nothing to validate: no active change under openspec/changes/ and no main spec under openspec/specs/"; fail=1; \
 	else \
+		if [ -n "$(SPECS)" ]; then openspec validate --specs --strict || fail=1; fi; \
 		for c in $(CHANGES); do openspec validate $$c --strict || fail=1; done; \
 	fi; \
 	echo "VALIDATE_EXIT:$$fail"; exit $$fail

@@ -27,7 +27,7 @@ paraphrase them.
 - `make test` — `go test ./...`
 - `make format` — `gofmt -l .` must list nothing (check only, never rewrites)
 - `make lint` — `go vet ./... && staticcheck ./...`
-- `make validate` — `openspec validate --strict` on every active change
+- `make validate` — `openspec validate --strict` on the main specs and every active change (having neither fails)
 - `make gates` — all of the above
 
 `make deps` is separate: it checks that every tool and login in `docs/dependencies.md` is present.
