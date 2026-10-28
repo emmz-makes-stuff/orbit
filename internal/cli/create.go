@@ -30,6 +30,10 @@ func (s *session) planFor(ws string) (*plan, error) {
 	if err := config.CheckMountable(ws); err != nil {
 		return nil, fmt.Errorf("can't use this directory as a workspace: %w", err)
 	}
+	if home := config.Canonical(s.d.Home); workspace.Within(home, ws) {
+		return nil, fmt.Errorf("refusing to make %s a workspace: it would expose everything in your home "+
+			"directory (%s), ~/.ssh included, to the VM; run orbit in a project directory instead", ws, home)
+	}
 	cfg, err := config.Load(s.d.Home)
 	if err != nil {
 		return nil, err

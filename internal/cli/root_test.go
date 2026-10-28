@@ -394,6 +394,29 @@ func TestExtraOverlappingWorkspaceRefused(t *testing.T) {
 	}
 }
 
+func TestHomeAndAncestorsRefused(t *testing.T) {
+	f := newFixture(t)
+	for _, dir := range []string{f.home, filepath.Dir(f.home), "/"} {
+		f.stderr.Reset()
+		f.cd(dir)
+		if code := f.run(); code == 0 {
+			t.Errorf("orbit in %s: exit 0, want refusal", dir)
+		}
+		if !strings.Contains(f.stderr.String(), "expose everything in your home") {
+			t.Errorf("orbit in %s: stderr = %q", dir, f.stderr.String())
+		}
+	}
+	if len(f.orb.Created) != 0 {
+		t.Errorf("created %d VMs", len(f.orb.Created))
+	}
+	// A subdirectory of home is fine (the fixture's workspace is ~/github/emmz).
+	f.cd(f.ws)
+	f.mustRun(t)
+	if len(f.orb.Created) != 1 {
+		t.Error("subdirectory of home was not created")
+	}
+}
+
 func TestUnmountableWorkspaceRefused(t *testing.T) {
 	f := newFixture(t)
 	odd := filepath.Join(f.home, "a:b")
