@@ -17,8 +17,8 @@
 
 ## 4. OrbStack client
 
-- [ ] 4.1 Implement `internal/orb.Client` over `orbctl`: List (JSON, including `config.mounts`), Create (isolated, forward-ssh-agent, ordered `SRC:SRC` mounts, distro and limits), Start, Stop, Delete, Run (stdin, stdout and stderr wired), and ExecShell (`syscall.Exec` with env). Also detect a missing `orbctl` with a clear error. Verify with unit tests on the argument building and JSON parsing, using a fake runner
-- [ ] 4.2 Add a fake `Client` for use by command tests, and verify it compiles against the interface
+- [x] 4.1 Implement `internal/orb.Client` over `orbctl`: List (JSON, including `config.mounts`), Create (isolated, forward-ssh-agent, ordered `SRC:SRC` mounts, distro and limits), Start, Stop, Delete, Run (stdin, stdout and stderr wired), and ExecShell (`syscall.Exec` with env). Also detect a missing `orbctl` with a clear error. Verify with unit tests on the argument building and JSON parsing, using a fake runner
+- [x] 4.2 Add a fake `Client` for use by command tests, and verify it compiles against the interface
 
 ## 5. Claude auth
 
