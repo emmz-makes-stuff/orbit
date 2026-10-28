@@ -25,8 +25,9 @@ type vm struct {
 	// steps records provisioning in order: "copy", "baseline", "setup", "marker".
 	steps  []string
 	copied map[string]string // tar entry name -> contents ("<dir>" or "-> target" for links)
-	// baselineInput is what was piped to the baseline step.
+	// baselineInput is what was piped to the baseline step; baselineUser is its ORBIT_USER.
 	baselineInput string
+	baselineUser  string
 }
 
 func (v *vm) onRun(r orbtest.Run) error {
@@ -41,9 +42,10 @@ func (v *vm) onRun(r orbtest.Run) error {
 	case len(args) >= 3 && args[0] == "sh" && strings.Contains(args[2], "tar -C / -xpf -"):
 		v.steps = append(v.steps, "copy")
 		v.copied = readTar(r.Input)
-	case len(args) == 3 && args[0] == "sh" && strings.Contains(args[2], "bash -s"):
+	case len(args) == 5 && args[0] == "env" && args[2] == "sh" && strings.Contains(args[4], "bash -s"):
 		v.steps = append(v.steps, "baseline")
 		v.baselineInput = r.Input
+		v.baselineUser = strings.TrimPrefix(args[1], "ORBIT_USER=")
 		if v.baseExit != 0 {
 			return &orb.ExitError{Code: v.baseExit}
 		}
@@ -160,6 +162,9 @@ func TestFirstRunCreatesProvisionsAndAttaches(t *testing.T) {
 	}
 	if f.vm.baselineInput != "apt-get install -y ripgrep\n" {
 		t.Errorf("baseline input = %q", f.vm.baselineInput)
+	}
+	if f.vm.baselineUser != "emmz" {
+		t.Errorf("baseline ORBIT_USER = %q, want the VM's default user", f.vm.baselineUser)
 	}
 	if len(f.orb.Shells) != 1 || f.orb.Shells[0].Machine != name || f.orb.Shells[0].Workdir != f.ws {
 		t.Errorf("shells = %+v, want one in %s", f.orb.Shells, f.ws)

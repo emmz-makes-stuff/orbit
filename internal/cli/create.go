@@ -107,7 +107,9 @@ func (s *session) provision(ctx context.Context, p *plan) error {
 		s.info("provisioning: running %s", baseline)
 		err := s.client.Run(ctx, orb.RunOptions{
 			Machine: p.name, User: "root",
-			Args:  []string{"sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash -s; else exec sh -s; fi"},
+			// ORBIT_USER lets the baseline install per-user tools for the default user.
+			Args: []string{"env", "ORBIT_USER=" + user,
+				"sh", "-c", "if command -v bash >/dev/null 2>&1; then exec bash -s; else exec sh -s; fi"},
 			Stdin: f, Stdout: s.d.Stdout, Stderr: s.d.Stderr,
 		})
 		f.Close()

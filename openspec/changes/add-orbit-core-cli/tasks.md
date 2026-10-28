@@ -31,6 +31,7 @@
 - [x] 6.2 Implement the attach path: start if stopped, warn if the provisioned marker is missing, warn if the Mac's SSH agent is empty (`ssh-add -l` exits 1 or 2; this check also runs on create), read the token (warn if absent), set `CLAUDE_CODE_OAUTH_TOKEN` and `ORBENV`, then exec the shell in the current directory. Verify with command tests covering stopped-VM, subdirectory working dir, empty-agent, keys-loaded, token-present and token-absent scenarios
 - [x] 6.3 Wire overlap refusal and the OrbStack-unavailable error into the root command. Verify with command tests for both error messages and the non-zero exits
 - [x] 6.4 Refuse to create a workspace at the home directory or any ancestor of it (added after §6 at Emmz's request). Verify with command tests for `~`, `/`, `/Users`, and an allowed subdirectory
+- [x] 6.5 Pass the VM's default user to `baseline.sh` as `ORBIT_USER` (added in §8 at Emmz's request, so the baseline can install per-user tools such as Claude Code). Verify with a command test that the baseline run sets it
 
 ## 7. Lifecycle commands
 
@@ -42,7 +43,7 @@
 
 ## 8. Documentation
 
-- [ ] 8.1 Write `README.md`: install, `claude setup-token` + `orbit auth`, `ssh-add --apple-use-keychain` plus `ssh-add --apple-load-keychain` in `~/.zshrc`, the config file with examples, `baseline.sh` and `.orbit/setup.sh`, every command, and the security model (isolated machines share a kernel; push access and the open network are deliberate). Verify that each documented command matches `orbit --help`
+- [x] 8.1 Write `README.md`: install, `claude setup-token` + `orbit auth`, `ssh-add --apple-use-keychain` plus `ssh-add --apple-load-keychain` in `~/.zshrc`, the config file with examples, `baseline.sh` and `.orbit/setup.sh`, every command, and the security model (isolated machines share a kernel; push access and the open network are deliberate). Verify that each documented command matches `orbit --help`
 
 ## 9. Integration checks (manual, real OrbStack)
 

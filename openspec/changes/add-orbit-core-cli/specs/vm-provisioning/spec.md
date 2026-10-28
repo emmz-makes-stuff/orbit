@@ -20,6 +20,10 @@ without error.
 - **WHEN** `~/.config/orbit/baseline.sh` does not exist
 - **THEN** the VM is created and attached normally
 
+#### Scenario: Baseline knows the default user
+- **WHEN** `baseline.sh` runs
+- **THEN** `ORBIT_USER` is set to the VM's default user's name, so per-user tools can be installed for that user
+
 ### Requirement: Apply the workspace setup
 After the baseline, `orbit` SHALL run the workspace's `.orbit/setup.sh` inside the VM, as the default
 user, with the workspace directory as its working directory. If the file is absent, the step SHALL be
