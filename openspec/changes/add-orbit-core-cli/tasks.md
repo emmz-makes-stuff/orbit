@@ -8,8 +8,8 @@
 
 ## 2. Configuration
 
-- [ ] 2.1 Implement `internal/config`: load `~/.config/orbit/config.toml` (a missing file means empty config), expand `~`, canonicalise workspace keys, merge global and per-workspace extras, default extra mode to `ro`, and reject unknown modes and paths containing `:` or `,`. Verify with table tests for each case
-- [ ] 2.2 Verify the "workspace content cannot widen access" requirement: a unit test shows that config loading reads only `~/.config/orbit`, and that a `.orbit/config.toml` in a workspace has no effect
+- [x] 2.1 Implement `internal/config`: load `~/.config/orbit/config.toml` (a missing file means empty config), expand `~`, canonicalise workspace keys, merge global and per-workspace extras, default extra mode to `ro`, and reject unknown modes and paths containing `:` or `,`. Verify with table tests for each case
+- [x] 2.2 Verify the "workspace content cannot widen access" requirement: a unit test shows that config loading reads only `~/.config/orbit`, and that a `.orbit/config.toml` in a workspace has no effect
 
 ## 3. Workspace resolution
 
