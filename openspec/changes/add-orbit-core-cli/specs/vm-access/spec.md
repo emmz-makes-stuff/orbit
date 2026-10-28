@@ -44,6 +44,10 @@ absolute path in the VM. The VM SHALL get nothing else from the Mac.
 - **WHEN** an extra is declared only for `~/github/emmz`
 - **THEN** the `~/github/emmz` VM has it and other workspace VMs do not
 
+#### Scenario: Overlapping extras
+- **WHEN** one extra lies within another and at least one of the two is `rw`, such as `~/.config` with `~/.config/gh` as `rw`
+- **THEN** create, rebuild and sync exit non-zero, name both extras, and create or change nothing, because replacing the read-only copy would reach through the mount to the Mac
+
 #### Scenario: Missing extra
 - **WHEN** a declared extra does not exist on the Mac at create or rebuild time
 - **THEN** the command exits non-zero, names the extra, and no VM is left half-created

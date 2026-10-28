@@ -161,15 +161,9 @@ func runSync(ctx context.Context, s *session, m workspace.Machine) error {
 	if err != nil {
 		return err
 	}
-	var copies []string
-	for _, e := range cfg.ExtrasFor(m.Workspace) {
-		if e.Mode != config.ModeRO {
-			continue
-		}
-		if err := s.d.Stat(e.Path); err != nil {
-			return fmt.Errorf("extra %s doesn't exist on this Mac; nothing was synced", e.Path)
-		}
-		copies = append(copies, e.Path)
+	_, copies, err := s.splitExtras(cfg, m.Workspace)
+	if err != nil {
+		return fmt.Errorf("%w; nothing was synced", err)
 	}
 	if len(copies) == 0 {
 		fmt.Fprintf(s.d.Stdout, "%s has no read-only extras to sync.\n", m.Name)

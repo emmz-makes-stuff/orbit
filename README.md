@@ -109,7 +109,9 @@ mode = "rw"                # mounted writeable: changes in the VM appear on the 
 ```
 
 - Paths start with `~/` or are absolute. They can't contain `:` or `,`.
-- An extra can't overlap the workspace itself.
+- An extra can't overlap the workspace itself. Nor can one extra sit inside another when either of
+  the two is `rw` (e.g. `~/.config` plus `~/.config/gh` as `rw`), because refreshing the read-only
+  copy would reach through the mount to your Mac. Nested read-only extras are fine.
 - Unknown keys are an error, so a typo like `mod = "rw"` doesn't quietly fall back to read-only.
 - A symlinked extra, such as a dotfile linked from a dotfiles repo, appears at the path you declared,
   with its target's contents.

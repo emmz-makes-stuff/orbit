@@ -38,24 +38,44 @@ func (s *session) planFor(ws string) (*plan, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := &plan{name: workspace.Name(ws), workspace: ws, cfg: cfg, mounts: []string{ws}}
-	for _, e := range cfg.ExtrasFor(ws) {
-		if workspace.Within(e.Path, ws) || workspace.Within(ws, e.Path) {
-			return nil, fmt.Errorf("extra %s overlaps the workspace %s; remove it from %s",
+	mounts, copies, err := s.splitExtras(cfg, ws)
+	if err != nil {
+		return nil, fmt.Errorf("%w; nothing was created", err)
+	}
+	return &plan{name: workspace.Name(ws), workspace: ws, cfg: cfg, mounts: append([]string{ws}, mounts...), copies: copies}, nil
+}
+
+// splitExtras checks ws's extras and splits them into writeable mounts and read-only copies.
+func (s *session) splitExtras(cfg *config.Config, ws string) (mounts, copies []string, err error) {
+	extras := cfg.ExtrasFor(ws)
+	for i, e := range extras {
+		if ws != "" && overlaps(e.Path, ws) { // "" is a VM that lost its workspace mount
+			return nil, nil, fmt.Errorf("extra %s overlaps the workspace %s; remove it from %s",
 				e.Path, ws, config.File(s.d.ConfigDir))
 		}
+		// Replacing a read-only copy starts with rm -rf in the VM, which reaches through any mount
+		// inside it to the Mac, and a copy inside a mount is written to the Mac.
+		for _, o := range extras[:i] {
+			if (e.Mode == config.ModeRW || o.Mode == config.ModeRW) && overlaps(e.Path, o.Path) {
+				return nil, nil, fmt.Errorf("extras %s and %s overlap and one of them is writeable, which could "+
+					"change files on your Mac; remove one of them from %s", o.Path, e.Path, config.File(s.d.ConfigDir))
+			}
+		}
 		if err := s.d.Stat(e.Path); err != nil {
-			return nil, fmt.Errorf("extra %s doesn't exist on this Mac (declared in %s); nothing was created",
+			return nil, nil, fmt.Errorf("extra %s doesn't exist on this Mac (declared in %s)",
 				e.Path, config.File(s.d.ConfigDir))
 		}
 		if e.Mode == config.ModeRW {
-			p.mounts = append(p.mounts, e.Path)
+			mounts = append(mounts, e.Path)
 		} else {
-			p.copies = append(p.copies, e.Path)
+			copies = append(copies, e.Path)
 		}
 	}
-	return p, nil
+	return mounts, copies, nil
 }
+
+// overlaps reports whether either path lies within the other.
+func overlaps(a, b string) bool { return workspace.Within(a, b) || workspace.Within(b, a) }
 
 // create makes and provisions the workspace VM for ws, returning its name. A VM whose provisioning
 // fails is kept for inspection.

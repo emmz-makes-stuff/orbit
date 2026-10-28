@@ -315,6 +315,30 @@ func TestSyncRecopiesReadOnlyExtras(t *testing.T) {
 	}
 }
 
+func TestSyncRefusesOverlappingExtras(t *testing.T) {
+	f := newFixture(t)
+	f.withVMs(vmFor(f.ws, orb.StateRunning))
+	mkdir(t, filepath.Join(f.home, ".config", "gh"))
+	f.config(t, "[[extras]]\npath = \"~/.config\"\n\n[[extras]]\npath = \"~/.config/gh\"\nmode = \"rw\"\n")
+	if code := f.run("sync"); code == 0 {
+		t.Fatal("want non-zero exit")
+	}
+	if !strings.Contains(f.stderr.String(), "nothing was synced") || len(f.vm.steps) != 0 {
+		t.Errorf("stderr = %q, steps = %q", f.stderr.String(), f.vm.steps)
+	}
+}
+
+func TestSyncByNameWithoutWorkspaceMount(t *testing.T) {
+	f := newFixture(t)
+	f.withVMs(orb.Machine{Name: "orbit-bare-000000", State: orb.StateRunning})
+	writeFile(t, filepath.Join(f.home, ".gitconfig"), "g\n")
+	f.config(t, "[[extras]]\npath = \"~/.gitconfig\"\n")
+	f.mustRun(t, "sync", "orbit-bare-000000")
+	if len(f.vm.copied) != 1 {
+		t.Errorf("copied = %v", f.vm.copied)
+	}
+}
+
 func TestSyncNothingToDo(t *testing.T) {
 	f := newFixture(t)
 	f.withVMs(vmFor(f.ws, orb.StateRunning))

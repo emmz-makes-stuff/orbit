@@ -3,6 +3,7 @@ package cli
 import (
 	"archive/tar"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -22,7 +23,12 @@ func copyExtras(ctx context.Context, client orb.Client, machine, user string, pa
 		return nil
 	}
 	pr, pw := io.Pipe()
-	go func() { pw.CloseWithError(writeTar(pw, paths)) }()
+	archived := make(chan error, 1)
+	go func() {
+		err := writeTar(pw, paths)
+		pw.CloseWithError(err)
+		archived <- err
+	}()
 
 	quoted := make([]string, len(paths))
 	for i, p := range paths {
@@ -40,7 +46,12 @@ func copyExtras(ctx context.Context, client orb.Client, machine, user string, pa
 		Stdin:   pr,
 		Stderr:  &stderr,
 	})
-	_ = pr.Close()
+	_ = pr.Close() // unblocks writeTar if the VM stopped reading early
+	// A Mac-side read failure is the real cause even when tar in the VM accepted a short archive.
+	// A closed pipe only means the VM side gave up first, so its error explains more.
+	if werr := <-archived; werr != nil && (err == nil || !errors.Is(werr, io.ErrClosedPipe)) {
+		return fmt.Errorf("copy read-only extras into %s: read them on this Mac: %w", machine, werr)
+	}
 	if err != nil {
 		return fmt.Errorf("copy read-only extras into %s: %v %s", machine, err, strings.TrimSpace(stderr.String()))
 	}

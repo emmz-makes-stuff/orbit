@@ -2,6 +2,7 @@ package cli
 
 import (
 	"archive/tar"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -397,6 +398,78 @@ func TestExtraOverlappingWorkspaceRefused(t *testing.T) {
 	}
 	if !strings.Contains(f.stderr.String(), "overlaps the workspace") || len(f.orb.Created) != 0 {
 		t.Errorf("stderr = %q, created = %d", f.stderr.String(), len(f.orb.Created))
+	}
+}
+
+func TestOverlappingExtrasRefused(t *testing.T) {
+	cases := []struct {
+		name, config string
+	}{
+		{"ro parent of rw", "[[extras]]\npath = \"~/.config\"\n\n[[extras]]\npath = \"~/.config/gh\"\nmode = \"rw\"\n"},
+		{"rw parent of ro", "[[extras]]\npath = \"~/notes\"\nmode = \"rw\"\n\n[[extras]]\npath = \"~/notes/x\"\n"},
+		{"rw inside rw", "[[extras]]\npath = \"~/notes\"\nmode = \"rw\"\n\n[[extras]]\npath = \"~/notes/x\"\nmode = \"rw\"\n"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t)
+			mkdir(t, filepath.Join(f.home, ".config", "gh"))
+			mkdir(t, filepath.Join(f.home, "notes", "x"))
+			f.config(t, c.config)
+			if code := f.run(); code == 0 {
+				t.Fatal("want non-zero exit")
+			}
+			msg := f.stderr.String()
+			if !strings.Contains(msg, "overlap and one of them is writeable") || !strings.Contains(msg, config.File(f.deps.ConfigDir)) {
+				t.Errorf("stderr = %q", msg)
+			}
+			if len(f.orb.Created) != 0 {
+				t.Error("a VM was created")
+			}
+		})
+	}
+}
+
+func TestUnreadableExtraReportsMacSideError(t *testing.T) {
+	f := newFixture(t)
+	secret := filepath.Join(f.home, ".config", "tool", "secret")
+	writeFile(t, secret, "s\n")
+	if err := os.Chmod(secret, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(secret, 0o644) })
+	f.config(t, "[[extras]]\npath = \"~/.config/tool\"\n")
+	// As if tar in the VM accepted the short archive and exited 0.
+	f.deps.Orb = func() (orb.Client, error) { return lenientTar{f.orb}, nil }
+	if code := f.run(); code == 0 {
+		t.Fatal("want non-zero exit")
+	}
+	msg := f.stderr.String()
+	if !strings.Contains(msg, "read them on this Mac") || !strings.Contains(msg, secret) {
+		t.Errorf("stderr = %q, want the Mac-side read error naming %s", msg, secret)
+	}
+	if len(f.orb.Shells) != 0 {
+		t.Error("attached after a failed copy")
+	}
+}
+
+// lenientTar reads whatever stdin a run gets and ignores a broken stream, as tar can.
+type lenientTar struct{ *orbtest.Fake }
+
+func (c lenientTar) Run(ctx context.Context, opts orb.RunOptions) error {
+	if opts.Stdin != nil {
+		_, _ = io.Copy(io.Discard, opts.Stdin)
+		opts.Stdin = nil
+	}
+	return c.Fake.Run(ctx, opts)
+}
+
+func TestNestedReadOnlyExtrasAllowed(t *testing.T) {
+	f := newFixture(t)
+	writeFile(t, filepath.Join(f.home, ".config", "gh", "hosts.yml"), "h\n")
+	f.config(t, "[[extras]]\npath = \"~/.config\"\n\n[[extras]]\npath = \"~/.config/gh\"\n")
+	f.mustRun(t)
+	if len(f.orb.Created) != 1 {
+		t.Error("VM not created")
 	}
 }
 

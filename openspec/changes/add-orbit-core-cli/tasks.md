@@ -53,3 +53,15 @@
 ## Workflow follow-up
 
 - Run `/opsx:verify`, then archive the change once review is satisfied.
+
+## 10. Review fixes: extras safety
+
+- [x] 10.1 Refuse, on create, rebuild and sync, any two extras where one lies within the other and either is `rw` (ro-within-ro stays allowed: it can't touch the Mac). The message names both extras and the config file, and nothing is created or synced. Add a vm-access spec scenario. Test with a ro parent and a rw child, a rw parent and a ro child, and rw inside rw
+- [x] 10.2 One extras check shared by `planFor` and `orbit sync`: existence, overlap with the workspace, overlap between extras, and the split into mounts and copies
+- [x] 10.3 `copyExtras` reports the Mac-side archive error (e.g. an unreadable file) instead of discarding it, and fails even if tar in the VM exits 0. Test it with the fake
+
+## 11. Review fixes: docs and nits
+
+- [ ] 11.1 Record the `ORBIT_CONFIG_DIR` override in `design.md ## Decisions` (why: tests and alternative setups; it is read only from the Mac's environment, so a VM can't set it). Add a scenario to the vm-access "Workspace content cannot widen access" requirement
+- [ ] 11.2 On attach, warn "never finished provisioning" only when the marker check exits non-zero. Any other `Run` failure gets its own warning naming the error. Test both
+- [ ] 11.3 README: a known-issue line saying workspaces under `/tmp` or `/var/folders` hit OrbStack's stale-delete behaviour (a VM can't recreate a file the Mac just deleted)
