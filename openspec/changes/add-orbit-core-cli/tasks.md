@@ -47,8 +47,8 @@
 
 ## 9. Integration checks (manual, real OrbStack)
 
-- [ ] 9.1 Add `integration/` tests behind `//go:build integration` that create a scratch workspace and drive the real binary through create, provision, list, stop/start, sync, rebuild and destroy. They also assert that there's no `/mnt/mac`, that the workspace is writeable from the VM, that `ro` extra edits don't reach the Mac, that the token is in the shell environment and not on disk, and that the internet is reachable. Verify with `go test -tags integration ./integration/...` passing on Emmz's Mac (run by hand, not a gate)
-- [ ] 9.2 Push check: with a key loaded in the Mac's agent, `git push` to a scratch remote from inside a workspace VM succeeds. Record the result in a devlog note
+- [x] 9.1 Add `integration/` tests behind `//go:build integration` that create a scratch workspace and drive the real binary through create, provision, list, stop/start, sync, rebuild and destroy. They also assert that there's no `/mnt/mac`, that the workspace is writeable from the VM, that `ro` extra edits don't reach the Mac, that the token is in the shell environment and not on disk, and that the internet is reachable. Verify with `go test -tags integration ./integration/...` passing on Emmz's Mac (run by hand, not a gate)
+- [x] 9.2 Push check: with a key loaded in the Mac's agent, `git push` to a scratch remote from inside a workspace VM succeeds. Record the result in a devlog note
 
 ## Workflow follow-up
 

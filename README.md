@@ -81,6 +81,9 @@ When the agent has no keys, orbit warns you on create and on attach.
 orbit reads its configuration **only from `~/.config/orbit/`, on the Mac**. A workspace is writeable
 from inside its VM, so nothing in a workspace can change what the VM is allowed to reach.
 
+To use a different directory, for testing say, set `ORBIT_CONFIG_DIR` in your Mac shell. orbit then
+reads `config.toml` and `baseline.sh` from there instead.
+
 ### `~/.config/orbit/config.toml`
 
 Every setting is optional, and a missing file is fine.

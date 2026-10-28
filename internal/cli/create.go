@@ -34,7 +34,7 @@ func (s *session) planFor(ws string) (*plan, error) {
 		return nil, fmt.Errorf("refusing to make %s a workspace: it would expose everything in your home "+
 			"directory (%s), ~/.ssh included, to the VM; run orbit in a project directory instead", ws, home)
 	}
-	cfg, err := config.Load(s.d.Home)
+	cfg, err := config.Load(s.d.ConfigDir, s.d.Home)
 	if err != nil {
 		return nil, err
 	}
@@ -42,11 +42,11 @@ func (s *session) planFor(ws string) (*plan, error) {
 	for _, e := range cfg.ExtrasFor(ws) {
 		if workspace.Within(e.Path, ws) || workspace.Within(ws, e.Path) {
 			return nil, fmt.Errorf("extra %s overlaps the workspace %s; remove it from %s",
-				e.Path, ws, filepath.Join(config.Dir(s.d.Home), "config.toml"))
+				e.Path, ws, config.File(s.d.ConfigDir))
 		}
 		if err := s.d.Stat(e.Path); err != nil {
 			return nil, fmt.Errorf("extra %s doesn't exist on this Mac (declared in %s); nothing was created",
-				e.Path, filepath.Join(config.Dir(s.d.Home), "config.toml"))
+				e.Path, config.File(s.d.ConfigDir))
 		}
 		if e.Mode == config.ModeRW {
 			p.mounts = append(p.mounts, e.Path)
@@ -102,7 +102,7 @@ func (s *session) provision(ctx context.Context, p *plan) error {
 		}
 	}
 
-	baseline := config.BaselinePath(s.d.Home)
+	baseline := config.BaselinePath(s.d.ConfigDir)
 	if f, err := os.Open(baseline); err == nil {
 		s.info("provisioning: running %s", baseline)
 		err := s.client.Run(ctx, orb.RunOptions{

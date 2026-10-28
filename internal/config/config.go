@@ -61,16 +61,35 @@ type rawConfig struct {
 // DefaultDistro is used when the config doesn't name one: OrbStack's default Ubuntu.
 const DefaultDistro = "ubuntu"
 
-// Dir is orbit's config directory under the Mac home directory.
+// DirEnv overrides the config directory. It is read on the Mac, so a VM cannot influence it.
+const DirEnv = "ORBIT_CONFIG_DIR"
+
+// Dir is orbit's default config directory under the Mac home directory.
 func Dir(home string) string { return filepath.Join(home, ".config", "orbit") }
 
-// BaselinePath is the common baseline script every new VM runs.
-func BaselinePath(home string) string { return filepath.Join(Dir(home), "baseline.sh") }
+// DirFromEnv returns $ORBIT_CONFIG_DIR (made absolute) when it is set, otherwise Dir(home).
+func DirFromEnv(home string, getenv func(string) string) (string, error) {
+	dir := getenv(DirEnv)
+	if dir == "" {
+		return Dir(home), nil
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("%s=%q: %w", DirEnv, dir, err)
+	}
+	return abs, nil
+}
 
-// Load reads <home>/.config/orbit/config.toml. A missing file is an empty config.
-// Nothing outside that directory is ever read: workspace content cannot widen a VM's access.
-func Load(home string) (*Config, error) {
-	path := filepath.Join(Dir(home), "config.toml")
+// File is the config file in a config directory.
+func File(dir string) string { return filepath.Join(dir, "config.toml") }
+
+// BaselinePath is the common baseline script every new VM runs.
+func BaselinePath(dir string) string { return filepath.Join(dir, "baseline.sh") }
+
+// Load reads config.toml from the config directory dir, expanding ~ to home. A missing file is
+// an empty config. Nothing outside dir is ever read: workspace content cannot widen a VM's access.
+func Load(dir, home string) (*Config, error) {
+	path := File(dir)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return &Config{Distro: DefaultDistro, workspaces: map[string][]Extra{}}, nil

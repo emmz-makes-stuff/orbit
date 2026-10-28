@@ -98,6 +98,7 @@ func newFixture(t *testing.T) *fixture {
 	mkdir(t, ws)
 	f := &fixture{harness: h, home: home, ws: ws, vm: &vm{user: "emmz"}}
 	h.deps.Home = home
+	h.deps.ConfigDir = config.Dir(home)
 	h.deps.Getwd = func() (string, error) { return ws, nil }
 	h.orb.OnRun = f.vm.onRun
 	return f
@@ -107,7 +108,7 @@ func (f *fixture) cd(dir string) { f.deps.Getwd = func() (string, error) { retur
 
 func (f *fixture) config(t *testing.T, body string) {
 	t.Helper()
-	writeFile(t, filepath.Join(config.Dir(f.home), "config.toml"), body)
+	writeFile(t, config.File(f.deps.ConfigDir), body)
 }
 
 func mkdir(t *testing.T, dir string) {
@@ -145,7 +146,7 @@ func envValue(env []string, key string) (string, bool) {
 
 func TestFirstRunCreatesProvisionsAndAttaches(t *testing.T) {
 	f := newFixture(t)
-	writeFile(t, config.BaselinePath(f.home), "apt-get install -y ripgrep\n")
+	writeFile(t, config.BaselinePath(f.deps.ConfigDir), "apt-get install -y ripgrep\n")
 	writeFile(t, filepath.Join(f.ws, setupScript), "make deps\n")
 
 	f.mustRun(t)
@@ -471,7 +472,7 @@ func TestSetupFailureKeepsVMAndNamesScript(t *testing.T) {
 
 func TestBaselineFailureStopsBeforeSetup(t *testing.T) {
 	f := newFixture(t)
-	writeFile(t, config.BaselinePath(f.home), "exit 7\n")
+	writeFile(t, config.BaselinePath(f.deps.ConfigDir), "exit 7\n")
 	writeFile(t, filepath.Join(f.ws, setupScript), "true\n")
 	f.vm.baseExit = 7
 	if code := f.run(); code != 1 {
@@ -520,7 +521,7 @@ func TestNoTokenWarnsAndAttaches(t *testing.T) {
 func TestTokenNeverOnACommandLine(t *testing.T) {
 	f := newFixture(t)
 	f.keys.token, f.keys.stored = token, true
-	writeFile(t, config.BaselinePath(f.home), "true\n")
+	writeFile(t, config.BaselinePath(f.deps.ConfigDir), "true\n")
 	f.mustRun(t)
 	for _, r := range f.orb.Runs {
 		if strings.Contains(strings.Join(r.Args, " "), token) || strings.Contains(r.Input, token) {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/emmz-makes-stuff/orbit/internal/config"
 	"github.com/emmz-makes-stuff/orbit/internal/keychain"
 	"github.com/emmz-makes-stuff/orbit/internal/orb"
 	"github.com/emmz-makes-stuff/orbit/internal/orb/orbtest"
@@ -61,6 +62,7 @@ func newHarness(t *testing.T) *harness {
 		Environ:         func() []string { return []string{"HOME=/Users/e"} },
 		SSHAgentHasKeys: func() bool { return true },
 	}
+	h.deps.ConfigDir = config.Dir(h.deps.Home)
 	return h
 }
 

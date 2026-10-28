@@ -34,7 +34,7 @@ func writeConfig(t *testing.T, home, body string) {
 
 func TestLoadMissingFileIsEmpty(t *testing.T) {
 	home := newHome(t)
-	cfg, err := Load(home)
+	cfg, err := Load(Dir(home), home)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -65,7 +65,7 @@ mode = "rw"
 path = "~/notes/emmz"
 mode = "rw"
 `)
-	cfg, err := Load(home)
+	cfg, err := Load(Dir(home), home)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -105,7 +105,7 @@ path = "~/shared"
 path = "~/shared"
 mode = "rw"
 `)
-	cfg, err := Load(home)
+	cfg, err := Load(Dir(home), home)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestWorkspaceKeysAreCanonical(t *testing.T) {
 [[workspaces."~/link/".extras]]
 path = "~/x"
 `)
-	cfg, err := Load(home)
+	cfg, err := Load(Dir(home), home)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestSymlinkedExtraKeepsDeclaredPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeConfig(t, home, "[[extras]]\npath = \"~/.gitconfig\"\n")
-	cfg, err := Load(home)
+	cfg, err := Load(Dir(home), home)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestLoadErrors(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			home := newHome(t)
 			writeConfig(t, home, tc.body)
-			_, err := Load(home)
+			_, err := Load(Dir(home), home)
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("Load error = %v, want it to contain %q", err, tc.wantErr)
 			}
@@ -222,7 +222,7 @@ func TestWorkspaceConfigHasNoEffect(t *testing.T) {
 
 	t.Chdir(ws) // even running from inside the workspace
 
-	cfg, err := Load(home)
+	cfg, err := Load(Dir(home), home)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -230,5 +230,38 @@ func TestWorkspaceConfigHasNoEffect(t *testing.T) {
 		if strings.HasSuffix(e.Path, ".ssh") {
 			t.Fatalf("workspace-planted extra %q was loaded", e.Path)
 		}
+	}
+}
+
+func TestDirFromEnv(t *testing.T) {
+	env := map[string]string{}
+	getenv := func(k string) string { return env[k] }
+
+	if got, err := DirFromEnv("/Users/e", getenv); err != nil || got != "/Users/e/.config/orbit" {
+		t.Errorf("unset: %q, %v", got, err)
+	}
+	env[DirEnv] = "/tmp/orbit-test-config"
+	if got, err := DirFromEnv("/Users/e", getenv); err != nil || got != "/tmp/orbit-test-config" {
+		t.Errorf("absolute: %q, %v", got, err)
+	}
+	env[DirEnv] = "rel/dir"
+	got, err := DirFromEnv("/Users/e", getenv)
+	if err != nil || !filepath.IsAbs(got) || !strings.HasSuffix(got, "/rel/dir") {
+		t.Errorf("relative: %q, %v; want it made absolute", got, err)
+	}
+}
+
+func TestLoadFromOtherDir(t *testing.T) {
+	home := newHome(t)
+	dir := filepath.Join(home, "elsewhere")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(File(dir), []byte("distro = \"alpine\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir, home)
+	if err != nil || cfg.Distro != "alpine" {
+		t.Errorf("Load(other dir) = %+v, %v", cfg, err)
 	}
 }

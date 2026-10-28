@@ -214,7 +214,7 @@ func TestDestroyNonInteractiveNeedsYes(t *testing.T) {
 
 func TestRebuildResetsAndReprovisions(t *testing.T) {
 	f := newFixture(t)
-	writeFile(t, config.BaselinePath(f.home), "true\n")
+	writeFile(t, config.BaselinePath(f.deps.ConfigDir), "true\n")
 	writeFile(t, filepath.Join(f.ws, setupScript), "true\n")
 	f.withVMs(vmFor(f.ws, orb.StateRunning))
 	f.mustRun(t, "rebuild", "--yes")

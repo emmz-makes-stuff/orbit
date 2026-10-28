@@ -157,7 +157,7 @@ func runRebuild(ctx context.Context, s *session, m workspace.Machine, yes bool) 
 }
 
 func runSync(ctx context.Context, s *session, m workspace.Machine) error {
-	cfg, err := config.Load(s.d.Home)
+	cfg, err := config.Load(s.d.ConfigDir, s.d.Home)
 	if err != nil {
 		return err
 	}

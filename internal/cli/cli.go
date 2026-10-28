@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/emmz-makes-stuff/orbit/internal/config"
 	"github.com/emmz-makes-stuff/orbit/internal/keychain"
 	"github.com/emmz-makes-stuff/orbit/internal/orb"
 )
@@ -29,9 +30,11 @@ type Deps struct {
 	// ReadSecret reads a line from the terminal without echoing it.
 	ReadSecret func() ([]byte, error)
 	Home       string
-	Getwd      func() (string, error)
-	Stat       func(string) error
-	Environ    func() []string
+	// ConfigDir holds config.toml and baseline.sh: ~/.config/orbit, or $ORBIT_CONFIG_DIR.
+	ConfigDir string
+	Getwd     func() (string, error)
+	Stat      func(string) error
+	Environ   func() []string
 	// SSHAgentHasKeys reports whether the Mac's SSH agent holds at least one key.
 	SSHAgentHasKeys func() bool
 }
@@ -69,6 +72,11 @@ func Main(args []string) int {
 		fmt.Fprintln(os.Stderr, "orbit:", err)
 		return 1
 	}
+	configDir, err := config.DirFromEnv(home, os.Getenv)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "orbit:", err)
+		return 1
+	}
 	stdinFd := int(os.Stdin.Fd())
 	d := &Deps{
 		Orb:             func() (orb.Client, error) { return orb.New() },
@@ -79,6 +87,7 @@ func Main(args []string) int {
 		StdinIsTerminal: func() bool { return term.IsTerminal(stdinFd) },
 		ReadSecret:      func() ([]byte, error) { return term.ReadPassword(stdinFd) },
 		Home:            home,
+		ConfigDir:       configDir,
 		Getwd:           os.Getwd,
 		Stat:            func(p string) error { _, err := os.Stat(p); return err },
 		Environ:         os.Environ,
