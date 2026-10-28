@@ -34,11 +34,11 @@
 
 ## 7. Lifecycle commands
 
-- [ ] 7.1 Implement target selection (an explicit name that must be managed, or resolution from the current directory) shared by `stop`, `start`, `destroy`, `rebuild` and `sync`. Verify with unit tests for the implicit, unmanaged-name and no-workspace scenarios
-- [ ] 7.2 Implement `orbit list` (a table and `--json`, with orphans flagged). Verify with command tests covering the running/stopped, orphaned and JSON scenarios
-- [ ] 7.3 Implement `orbit stop` and `orbit start`, both succeeding when the VM is already in the requested state. Verify with command tests
-- [ ] 7.4 Implement `orbit destroy` (confirmation, `--yes`, refusal when stdin isn't a terminal and there's no `--yes`) and `orbit rebuild` (refusal for orphans, then destroy and the create path). Verify with command tests covering every `workspace-lifecycle` destroy and rebuild scenario
-- [ ] 7.5 Implement `orbit sync` (remove the old copies, then tar-stream the `ro` extras). Verify with a command test that the old copy is removed before extraction
+- [x] 7.1 Implement target selection (an explicit name that must be managed, or resolution from the current directory) shared by `stop`, `start`, `destroy`, `rebuild` and `sync`. Verify with unit tests for the implicit, unmanaged-name and no-workspace scenarios
+- [x] 7.2 Implement `orbit list` (a table and `--json`, with orphans flagged). Verify with command tests covering the running/stopped, orphaned and JSON scenarios
+- [x] 7.3 Implement `orbit stop` and `orbit start`, both succeeding when the VM is already in the requested state. Verify with command tests
+- [x] 7.4 Implement `orbit destroy` (confirmation, `--yes`, refusal when stdin isn't a terminal and there's no `--yes`) and `orbit rebuild` (refusal for orphans, then destroy and the create path). Verify with command tests covering every `workspace-lifecycle` destroy and rebuild scenario
+- [x] 7.5 Implement `orbit sync` (remove the old copies, then tar-stream the `ro` extras). Verify with a command test that the old copy is removed before extraction
 
 ## 8. Documentation
 

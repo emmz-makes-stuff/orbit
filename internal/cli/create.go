@@ -64,8 +64,13 @@ func (s *session) create(ctx context.Context, ws string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	s.info("creating %s for %s", p.name, ws)
-	err = s.client.Create(ctx, orb.CreateOptions{
+	return s.build(ctx, p)
+}
+
+// build creates and provisions a checked plan.
+func (s *session) build(ctx context.Context, p *plan) (string, error) {
+	s.info("creating %s for %s", p.name, p.workspace)
+	err := s.client.Create(ctx, orb.CreateOptions{
 		Name:   p.name,
 		Distro: p.cfg.Distro,
 		Mounts: p.mounts,

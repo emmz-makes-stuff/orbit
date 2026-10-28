@@ -39,8 +39,13 @@ type Deps struct {
 // NewRoot builds the orbit command tree.
 func NewRoot(d *Deps) *cobra.Command {
 	root := &cobra.Command{
-		Use:           "orbit",
-		Short:         "Create or attach to an isolated OrbStack VM for the current workspace",
+		Use:   "orbit",
+		Short: "Create or attach to an isolated OrbStack VM for the current workspace",
+		Long: "Run `orbit` in a project directory to open a shell in that directory's workspace VM.\n\n" +
+			"If no VM covers the directory yet, orbit creates an isolated OrbStack machine that can see\n" +
+			"only this directory (writeable) and the extras allowlisted in ~/.config/orbit/config.toml,\n" +
+			"provisions it with ~/.config/orbit/baseline.sh and the workspace's .orbit/setup.sh, then\n" +
+			"attaches. Running it in a subdirectory reuses the parent's VM.",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -48,10 +53,12 @@ func NewRoot(d *Deps) *cobra.Command {
 			return runRoot(cmd.Context(), d)
 		},
 	}
+	root.CompletionOptions.DisableDefaultCmd = true
 	root.SetIn(d.Stdin)
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	root.AddCommand(newAuthCmd(d))
+	root.AddCommand(lifecycleCommands(d)...)
 	return root
 }
 
